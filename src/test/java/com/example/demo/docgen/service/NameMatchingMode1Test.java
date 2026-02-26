@@ -101,6 +101,14 @@ public class NameMatchingMode1Test {
             assertNotNull(sheet.getRow(2), "Row 2 should exist");
             assertNotNull(sheet.getRow(3), "Row 3 should exist");
 
+            // Spot-check that benefit values were written (values-only matrix must fill cells)
+            // first plan's Doctor Visits value should be somewhere on row 2; column D is expected
+            assertEquals("Covered 100%", sheet.getRow(1).getCell(3).getStringCellValue(),
+                         "Premium plan value should be present");
+            // second plan's first benefit should appear further to the right (column G)
+            assertEquals("$20 copay", sheet.getRow(1).getCell(6).getStringCellValue(),
+                         "Basic plan value should be present");
+
             System.out.println("✓ Name-based matching test passed");
         }
     }

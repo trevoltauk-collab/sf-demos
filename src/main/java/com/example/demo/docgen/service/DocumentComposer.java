@@ -546,13 +546,23 @@ public class DocumentComposer {
             request.setData(enrichedData);
             
             // Log dimensions using whichever key we injected
-            String matrixKey = valuesOnly ? "comparisonMatrixValues" : "comparisonMatrix";
+            // NOTE: prior bug: name-matching mode sets matchBenefitNames=true without
+            // valuesOnly, so the matrix is stored under comparisonMatrixValues even
+            // though valuesOnly=false.  We must use `useValuesOnly` (which includes
+            // matchBenefitNames) when picking the key, otherwise we log with the
+            // wrong key and end up with NPE when mat is null.
+            String matrixKey = useValuesOnly ? "comparisonMatrixValues" : "comparisonMatrix";
             List<?> mat = (List<?>) enrichedData.get(matrixKey);
-            log.info("Plan comparison matrix auto-injection complete. Matrix dimensions: {} rows x {} columns", 
-                mat.size(),
-                mat.isEmpty() ? 0 : ((List<?>) mat.get(0)).size());
+            if (mat == null) {
+                log.warn("Plan comparison auto-transformation produced no matrix for key '{}'; " +
+                         "the request data may not contain expected matrix.", matrixKey);
+            } else {
+                log.info("Plan comparison matrix auto-injection complete. Matrix dimensions: {} rows x {} columns", 
+                    mat.size(),
+                    mat.isEmpty() ? 0 : ((List<?>) mat.get(0)).size());
+            }
         } catch (Exception e) {
-            log.warn("Error during auto-transformation of plan data, proceeding without transformation", e);
+            log.error("Error during auto-transformation of plan data, proceeding without transformation", e);
             // Don't fail the entire generation if auto-transformation has issues
             // The rendering may still work with raw plan data or may fail with a more specific error
         }

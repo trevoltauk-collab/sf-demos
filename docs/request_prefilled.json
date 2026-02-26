@@ -1,0 +1,27 @@
+curl -v -X POST http://localhost:8080/api/documents/generate/excel \
+  -H "Content-Type: application/json" \
+  -d '{
+    "namespace":"common-templates",
+    "templateId":"plan-comparison-name-matching",
+    "data":{
+      "plans":[
+        {
+          "planName":"Premium",
+          "benefits":[
+            {"name":"Doctor Visits","value":"Covered 100%"},
+            {"name":"Prescriptions","value":"$5 copay"},
+            {"name":"Eye Care","value":"Full Coverage"}
+          ]
+        },
+        {
+          "planName":"Basic",
+          "benefits":[
+            {"name":"Doctor Visits","value":"$20 copay"},
+            {"name":"Prescriptions","value":"$10 copay"},
+            {"name":"Eye Care","value":"Not Covered"}
+          ]
+        }
+      ]
+    }
+  }' \
+  -o output_prefilled.xlsx
