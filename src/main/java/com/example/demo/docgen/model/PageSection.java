@@ -98,6 +98,17 @@ public class PageSection {
     private Boolean overwrite = true;
     
     /**
+     * When rendering 2D range mappings (e.g., benefit comparison matrices) in non-grouped mode:
+     * - true: Expected template has benefit names in first column; use name-based row matching
+     * - false (default): Auto-generate benefit names in first column from data; use positional filling
+     * 
+     * Only applies when fieldMappingGroups is not specified (single mapping mode).
+     * When fieldMappingGroups is specified, use the flag in FieldMappingGroup instead.
+     */
+    @Builder.Default
+    private Boolean matchBenefitNamesInTemplate = false;
+    
+    /**
      * Check if this section uses multiple mapping groups
      */
     public boolean hasMultipleMappingGroups() {

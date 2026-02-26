@@ -80,4 +80,17 @@ public class FieldMappingGroup {
      * Can be overridden by individual field styles in fieldStyles map
      */
     private FieldStyling defaultStyle;
+    
+    /**
+     * When rendering 2D range mappings (e.g., benefit comparison matrices):
+     * - true: Expected template has benefit names in first column; use name-based row matching
+     * - false (default): Auto-generate benefit names in first column from data; use positional filling
+     * 
+     * Only applies to 2D list mappings in Excel sections.
+     * When true, the first cell of each incoming row is treated as a benefit name
+     * and is matched against existing names in the template's first column.
+     * When false, incoming names are written to the first column and data is filled sequentially.
+     */
+    @Builder.Default
+    private Boolean matchBenefitNamesInTemplate = false;
 }

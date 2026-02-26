@@ -1,0 +1,38 @@
+---
+# Template for plan comparison with MODE 1: Name-based matching
+# 
+# Use this template when the Excel template already has benefit names
+# populated in the first column. The renderer will match incoming benefit
+# names to the template names and write values to the correct rows.
+# 
+# This allows incoming plan data to have benefits in any order;
+# they will be placed into the template rows matching their names.
+
+templateId: plan-comparison-name-matching
+description: Plan comparison with name-based benefit matching (Mode 1)
+
+# Configuration for plan comparison transformation
+config:
+  columnSpacing: 2
+  # Enable name-based matching: template has benefit names in first column
+  # When true, DocumentComposer injects comparisonMatrixValues (benefit column excluded)
+  # and the range mapping should start at column B (values only)
+  matchBenefitNamesInTemplate: true
+
+sections:
+  - sectionId: plan_comparison
+    type: EXCEL
+    templatePath: comparison-template-prefilled.xlsx
+    mappingType: JSONPATH
+    
+    # Enable name-based row matching in the renderer
+    matchBenefitNamesInTemplate: true
+    
+    fieldMappings:
+      # Map comparison matrix to the VALUE columns ONLY (B1:G6)
+      # The benefit names stay in column A (from the template)
+      # comparisonMatrixValues contains: [header row without "Benefit", then data rows without first column]
+      # So B1 gets the first plan name, B2 gets first plan's first benefit value, etc.
+      "B1:G6": "$.comparisonMatrixValues"
+    
+    overwrite: true

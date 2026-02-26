@@ -338,8 +338,8 @@ class ExcelGenerationComprehensiveTest {
             System.out.println("Row0: " + rowToString(sheet, 0, 0, 10));
             System.out.println("Row1: " + rowToString(sheet, 1, 0, 10));
 
-            // compute offsets using the same spacing as plan-comparison config
-            int spacing = 2;
+            // the values-only template uses columnSpacing = 1 (see plan-comparison-values-only.yaml)
+            int spacing = 1;
             int firstPlanCol = 1 + spacing;
             int secondPlanCol = firstPlanCol + 1 + spacing;
 

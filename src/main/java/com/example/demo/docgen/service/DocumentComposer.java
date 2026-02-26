@@ -432,18 +432,27 @@ public class DocumentComposer {
             }
 
             // Determine whether the template expects a values-only matrix
+            // This applies to both "valuesOnly" mode and "matchBenefitNamesInTemplate" (name-matching) mode
             boolean valuesOnly = false;
+            boolean matchBenefitNames = false;
+            
             if (template.getConfig() != null) {
                 Object flag = template.getConfig().get("valuesOnly");
                 valuesOnly = flag instanceof Boolean && (Boolean) flag;
+                
+                Object matchFlag = template.getConfig().get("matchBenefitNamesInTemplate");
+                matchBenefitNames = matchFlag instanceof Boolean && (Boolean) matchFlag;
             }
+            
+            // When name-matching mode is enabled, use values-only matrix (benefit column excluded)
+            boolean useValuesOnly = valuesOnly || matchBenefitNames;
 
             // Skip if the appropriate matrix already exists in the data
-            if (!valuesOnly && data.containsKey("comparisonMatrix")) {
+            if (!useValuesOnly && data.containsKey("comparisonMatrix")) {
                 log.debug("comparisonMatrix already exists in data, skipping auto-transformation");
                 return;
             }
-            if (valuesOnly && data.containsKey("comparisonMatrixValues")) {
+            if (useValuesOnly && data.containsKey("comparisonMatrixValues")) {
                 log.debug("comparisonMatrixValues already exists in data, skipping auto-transformation");
                 return;
             }
@@ -462,11 +471,11 @@ public class DocumentComposer {
             }
             
             // Transform the plan data into a comparison matrix with configured spacing
-            log.info("Auto-transforming plan data into comparison matrix for {} template (spacing: {}, valuesOnly: {})",
-                request.getTemplateId(), columnSpacing, valuesOnly);
+            log.info("Auto-transforming plan data into comparison matrix for {} template (spacing: {}, valuesOnly: {}, matchBenefitNames: {})",
+                request.getTemplateId(), columnSpacing, valuesOnly, matchBenefitNames);
 
             Map<String, Object> enrichedData;
-            if (valuesOnly) {
+            if (useValuesOnly) {
                 enrichedData = PlanComparisonTransformer.injectComparisonMatrixValuesOnly(
                     data,
                     plans,

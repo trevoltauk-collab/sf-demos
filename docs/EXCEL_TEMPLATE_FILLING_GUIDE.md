@@ -146,6 +146,63 @@ sections:
 - Only the top-left cell of a merged region receives values
 - This prevents corrupting merged cell data
 
+### Scenario 2b: Name Matching with Prefilled Benefit Names
+
+**Use Case:** The Excel template already contains a column of benefit names and you want
+to populate only the corresponding values. The plan data may have rows in a different
+order or might be missing/extra compared to the template. Instead of blindly copying
+rows by index, the renderer looks up each benefit name in the template and only writes
+the value to the row with the matching name.
+
+**Key Points:**
+- A boolean flag `matchBenefitNamesInTemplate` enables this mode. It can be placed on
+the `PageSection` or on an individual `FieldMappingGroup`.
+- When the flag is true, the `DocumentComposer` automatically injects a values-only
+  matrix (benefit column excluded) behind the scenes, so formulas in the template
+  remain intact and the first column of names is not overwritten.
+- The range you specify for the matrix should **exclude** the name column. For example,
+  if column A holds the benefit names in the template, use `B2:D5` instead of
+  `A2:D5`.
+- The injected data still contains the benefit names as its first column; the renderer
+  discards them when copying values. This allows the transformer to build the matrix
+  normally while the renderer performs the name lookup.
+- Template names are preserved (not overwritten) unless they are blank, which lets you
+  prefill headings, formatting, or missing rows.
+
+**Configuration Example:**
+```yaml
+sections:
+  - sectionId: plan_comparison
+    type: EXCEL
+    templatePath: comparison-template.xlsx
+    mappingType: JSONPATH
+    matchBenefitNamesInTemplate: true    # enable name‑matching mode
+    fieldMappings:
+      "Sheet1!B2:D5": "$.comparisonMatrix"  # notice B start column
+```
+
+**Data Preparation:**
+The transformer call does not need to change; you continue to use
+`injectComparisonMatrix()` or `injectComparisonMatrixValuesOnly()` as before. The
+renderer will ignore the first column of the resulting matrix.
+
+**Behavior:**
+- Column spacing values are still honoured, but the final matrix passed to the
+  renderer has one fewer column because the name column is dropped.
+- Row order of the output workbook matches the template, not the input data.
+- Rows with names not found in the template are skipped; data rows with matching
+  names but extra columns are truncated to the range width.
+
+**Why use this mode?**
+- Templates created by business users often contain pre‑populated benefit labels
+  with styling or formulas that should not be replaced by the engine.
+- It is safer when plans have optional benefits or when the two lists may diverge.
+
+*Note:* scenario 2b is orthogonal to the values-only mode; you can enable both by
+setting `valuesOnly: true` (on the template config) and `matchBenefitNamesInTemplate: true`.
+The `DocumentComposer` handles both cases transparently.
+
+
 ### Scenario 2a: Multi-band Plan Comparison Matrix (Age/Rating Bands)
 
 **Use Case:** Some data models require rendering multiple independent blocks (bands) of related values for each plan. For example, a set of insurance plans may provide age‑based ratings that are grouped into three ranges (0‑30, 31‑47, 48+). Each band should start at the same row so that the top of every block aligns horizontally, and the plan headers need to span all three bands.
@@ -253,6 +310,10 @@ sections:
 ### Scenario 3: Values-Only Mapping (Preserves Formulas)
 
 **Use Case:** Fill worksheet with data values while preserving formula cells.
+
+> **Note:** the values-only transformer is also automatically applied when
+> `matchBenefitNamesInTemplate` (name-matching) mode is enabled. In that case the
+> first column (benefit names) is removed from the range before values are written.
 
 **Challenge:** Some templates contain formula cells (e.g., totals, calculations) in the target range that should not be overwritten.
 
@@ -486,8 +547,27 @@ public class PageSection {
     private Map<String, String> fieldMappings;          // Single-cell/range mappings
     private List<FieldMappingGroup> fieldMappingGroups; // Repeating group configs
     private boolean overwrite;                          // Overwrite existing values
+    private Boolean matchBenefitNamesInTemplate;        // If true, name-based row matching mode
     private int order;                                  // Rendering order
     private String condition;                           // Conditional rendering
+}
+```
+
+### FieldMappingGroup Configuration
+
+The `FieldMappingGroup` model is used when you need repeating groups. It mirrors
+many of the same settings as `PageSection`, including the ability to toggle
+name‑matching on a per‑group basis:
+
+```java
+@Data
+@Builder
+public class FieldMappingGroup {
+    private MappingType mappingType;
+    private String basePath;
+    private RepeatingGroupConfig repeatingGroup;
+    private Boolean matchBenefitNamesInTemplate; // can be set here when groups are used
+    // ... other fields omitted for brevity
 }
 ```
 
@@ -536,6 +616,8 @@ enum IndexPosition {
 - Use clear, descriptive section IDs
 - Place headers in separate rows from data
 - Document template structure in template file or YAML comments
+- If you pre-fill benefit or item names, enable `matchBenefitNamesInTemplate`
+  and leave the name column outside of your range
 
 ❌ **DON'T:**
 - Rely on dynamic row insertion unless necessary
@@ -673,14 +755,17 @@ Rows 3+: Benefit rows (Benefit name in column A, values in B, C, D)
 templateId: plan-comparison
 config:
   columnSpacing: 1
-  valuesOnly: true
+  valuesOnly: true           # preserve any formulas in the template
+# matchBenefitNamesInTemplate may also be set here or on a section/group:
+# launch name‑matching mode if template already has a first column of names
 sections:
   - sectionId: comparison_matrix
     type: EXCEL
     templatePath: comparison-template.xlsx
     mappingType: JSONPATH
+    matchBenefitNamesInTemplate: true      # optional, see discussion above
     fieldMappings:
-      "B2:D5": "$.comparisonMatrixValues"
+      "B2:D5": "$.comparisonMatrixValues"  # note range excludes A (names)
 ```
 
 **Data Preparation:**
