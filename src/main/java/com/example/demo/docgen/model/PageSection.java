@@ -89,6 +89,14 @@ public class PageSection {
     private List<OverflowConfig> overflowConfigs = new ArrayList<>();
     
     /**
+     * Section-specific configuration map.  This behaves much like the
+     * template-level `config` map but applies only to this section.  It's used
+     * by features such as per-sheet transformers, custom plansPath, etc.
+     */
+    @Builder.Default
+    private Map<String, Object> config = new HashMap<>();
+
+    /**
      * Control whether range mappings should overwrite existing non-blank cells.
      * - true (default): overwrite all cells in the range
      * - false: preserve existing non-blank cells and formulas

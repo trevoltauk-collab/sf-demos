@@ -202,21 +202,30 @@ public class DocumentComposer {
                 template = templateLoader.loadTemplate(request.getTemplateId(), request.getData());
             }
 
-            // Extract columnSpacing config from template (default to 1 if not specified)
-            int columnSpacing = getColumnSpacingFromTemplate(template);
-            
-            // Auto-transform plan data if needed (using configured spacing).  Pass template so
-            // we can inspect additional configuration like `valuesOnly`.
-            transformPlanDataIfNeeded(request, template, columnSpacing);
-
-            RenderContext context = new RenderContext(template, request.getData());
-            String ns = request.getNamespace() != null ? request.getNamespace() : "common-templates";
-            context.setNamespace(ns);
+            // preserve original data so each section can start from a clean copy
+            Map<String,Object> originalData = request.getData() != null ? request.getData() : new HashMap<>();
 
             List<PageSection> sections = new ArrayList<>(template.getSections());
             sections.sort(Comparator.comparingInt(PageSection::getOrder));
 
+            // create a single context that will be reused for all sections; its data map
+            // will be replaced on each iteration so that metadata (workbook, template
+            // path, etc.) persists across sections of the same template.
+            RenderContext context = new RenderContext(template, new HashMap<>(originalData));
+            String ns = request.getNamespace() != null ? request.getNamespace() : "common-templates";
+            context.setNamespace(ns);
+
+            org.apache.poi.ss.usermodel.Workbook workbook = null;
+
             for (PageSection section : sections) {
+                // determine spacing for this section (section overrides template)
+                int columnSpacing = getColumnSpacing(section, template);
+
+                // compute section-specific data and then overwrite the context map
+                Map<String,Object> sectionData = applySectionTransform(originalData, template, section, columnSpacing);
+                context.getData().clear();
+                context.getData().putAll(sectionData);
+
                 if (section.getCondition() != null && !section.getCondition().isEmpty()) {
                     FieldMappingStrategy strategy = findMappingStrategy(section.getMappingType());
                     Object result = strategy.evaluatePath(context.getData(), section.getCondition());
@@ -234,19 +243,19 @@ public class DocumentComposer {
                 // If renderer can produce a Workbook directly, use that API path
                 if (renderer instanceof com.example.demo.docgen.renderer.ExcelRenderer) {
                     org.apache.poi.ss.usermodel.Workbook wb = ((com.example.demo.docgen.renderer.ExcelRenderer) renderer).renderWorkbook(section, context);
-                    if (wb != null) context.setMetadata("excelWorkbook", wb);
+                    if (wb != null) {
+                        workbook = wb;
+                        context.setMetadata("excelWorkbook", wb);
+                    }
                 } else {
                     // Fallback to PDF-based render contract
                     renderer.render(section, context);
                 }
             }
 
-            Object wbObj = context.getMetadata("excelWorkbook");
-            if (wbObj == null || !(wbObj instanceof org.apache.poi.ss.usermodel.Workbook)) {
+            if (workbook == null) {
                 throw new RuntimeException("No Excel workbook produced by renderers");
             }
-
-            org.apache.poi.ss.usermodel.Workbook workbook = (org.apache.poi.ss.usermodel.Workbook) wbObj;
             return excelOutputService.toBytes(workbook);
 
         } catch (TemplateLoadingException | ResourceLoadingException e) {
@@ -414,157 +423,138 @@ public class DocumentComposer {
      * @param request The document generation request containing template ID and data
      * @param columnSpacing Number of columns between plan columns (from template config)
      */
+    /**
+     * Legacy helper used by existing tests.  It wraps the new
+     * {@link #applySectionTransform(Map,DocumentTemplate,PageSection,int)}
+     * functionality using a synthetic section that has the template's config.
+     *
+     * This method mutates the request data map in-place and therefore retains
+     * the original behaviour clients relied upon.
+     */
     private void transformPlanDataIfNeeded(DocumentGenerationRequest request,
                                              DocumentTemplate template,
                                              int columnSpacing) {
+        Map<String, Object> dummyData = request.getData() != null ? request.getData() : new HashMap<>();
+        // create a fake section whose config mirrors the template-level config
+        PageSection dummySection = PageSection.builder()
+                .sectionId("__global__")
+                .config(template.getConfig() != null ? template.getConfig() : new HashMap<>())
+                .build();
+        Map<String,Object> transformed = applySectionTransform(dummyData, template, dummySection, columnSpacing);
+        request.setData(transformed);
+    }
+
+    /**
+     * Decide column spacing by consulting section config first, then falling
+     * back to template config (defaulting to 1 if neither specifies a valid
+     * value).
+     */
+    private int getColumnSpacing(PageSection section, DocumentTemplate template) {
         try {
-            // Only auto-transform for the canonical plan-comparison templates.  There
-            // may be additional variants (e.g. values-only) so we check prefix rather
-            // than hard-code every possible id; the `valuesOnly` flag in the template
-            // config will drive which helper is invoked.
-            if (request.getTemplateId() == null || !request.getTemplateId().startsWith("plan-comparison")) {
-                return; // Not a plan comparison template, skip transformation
-            }
-            
-            Map<String, Object> data = request.getData();
-            if (data == null) {
-                return; // No data, nothing to transform
-            }
-
-            // Determine whether the template expects a values-only matrix
-            // This applies to both "valuesOnly" mode and "matchBenefitNamesInTemplate" (name-matching) mode
-            boolean valuesOnly = false;
-            boolean matchBenefitNames = false;
-            
-            if (template.getConfig() != null) {
-                Object flag = template.getConfig().get("valuesOnly");
-                valuesOnly = flag instanceof Boolean && (Boolean) flag;
-                
-                Object matchFlag = template.getConfig().get("matchBenefitNamesInTemplate");
-                matchBenefitNames = matchFlag instanceof Boolean && (Boolean) matchFlag;
-            }
-            
-            // When name-matching mode is enabled, use values-only matrix (benefit column excluded)
-            boolean useValuesOnly = valuesOnly || matchBenefitNames;
-
-            // Skip if the appropriate matrix already exists in the data
-            if (!useValuesOnly && data.containsKey("comparisonMatrix")) {
-                log.debug("comparisonMatrix already exists in data, skipping auto-transformation");
-                return;
-            }
-            if (useValuesOnly && data.containsKey("comparisonMatrixValues")) {
-                log.debug("comparisonMatrixValues already exists in data, skipping auto-transformation");
-                return;
-            }
-            
-            // Check if plans data is present
-            Object plansObj = data.get("plans");
-            if (!(plansObj instanceof List)) {
-                return; // No plans field or not a list, skip transformation
-            }
-            
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> plans = (List<Map<String, Object>>) plansObj;
-            
-            if (plans.isEmpty()) {
-                return; // Empty plans, skip transformation
-            }
-            
-            // Transform the plan data into a comparison matrix with configured spacing
-            log.info("Auto-transforming plan data into comparison matrix for {} template (spacing: {}, valuesOnly: {}, matchBenefitNames: {})",
-                request.getTemplateId(), columnSpacing, valuesOnly, matchBenefitNames);
-
-            Map<String, Object> enrichedData;
-            if (useValuesOnly) {
-                enrichedData = PlanComparisonTransformer.injectComparisonMatrixValuesOnly(
-                    data,
-                    plans,
-                    "name",
-                    "value",
-                    columnSpacing
-                );
-            } else {
-                enrichedData = PlanComparisonTransformer.injectComparisonMatrix(
-                    data,
-                    plans,
-                    "name",
-                    "value",
-                    columnSpacing
-                );
-
-                // Optionally build a two-row header (primary plan name above, group below)
-                boolean twoRowHeader = false;
-                String groupField = "group"; // default field name for plan group
-                if (template.getConfig() != null) {
-                    Object flag = template.getConfig().get("twoRowHeader");
-                    twoRowHeader = flag instanceof Boolean && (Boolean) flag;
-                    Object gf = template.getConfig().get("groupField");
-                    if (gf instanceof String && !((String) gf).isEmpty()) {
-                        groupField = (String) gf;
+            if (section != null && section.getConfig() != null) {
+                Object spacingObj = section.getConfig().get("columnSpacing");
+                if (spacingObj instanceof Number) {
+                    int spacing = ((Number) spacingObj).intValue();
+                    if (spacing >= 0) {
+                        log.debug("Using section-specific columnSpacing: {}", spacing);
+                        return spacing;
                     }
                 }
-
-                if (twoRowHeader) {
-                    @SuppressWarnings("unchecked")
-                    List<List<Object>> matrix = (List<List<Object>>) enrichedData.get("comparisonMatrix");
-                    if (matrix != null && !matrix.isEmpty()) {
-                        // Compute total columns expected
-                        int totalColumns = 1 + (plans.size() * (1 + columnSpacing));
-
-                        // Build header row 1 (primary plan names)
-                        List<Object> header1 = new ArrayList<>(totalColumns);
-                        header1.add("Benefit");
-                        for (Map<String, Object> plan : plans) {
-                            for (int s = 0; s < columnSpacing; s++) header1.add("");
-                            Object pn = plan.get("planName");
-                            header1.add(pn != null ? pn : "");
-                        }
-
-                        // Build header row 2 (group names)
-                        List<Object> header2 = new ArrayList<>(totalColumns);
-                        header2.add("");
-                        for (Map<String, Object> plan : plans) {
-                            for (int s = 0; s < columnSpacing; s++) header2.add("");
-                            Object grp = plan.get(groupField);
-                            header2.add(grp != null ? grp : "");
-                        }
-
-                        // Combine: drop the original single header row produced by transformer
-                        List<List<Object>> full = new ArrayList<>();
-                        full.add(header1);
-                        full.add(header2);
-                        if (matrix.size() > 1) {
-                            full.addAll(matrix.subList(1, matrix.size()));
-                        }
-
-                        enrichedData.put("comparisonMatrix", full);
-                    }
-                }
-            }
-            
-            // Update the request's data with the enriched version containing matrix
-            request.setData(enrichedData);
-            
-            // Log dimensions using whichever key we injected
-            // NOTE: prior bug: name-matching mode sets matchBenefitNames=true without
-            // valuesOnly, so the matrix is stored under comparisonMatrixValues even
-            // though valuesOnly=false.  We must use `useValuesOnly` (which includes
-            // matchBenefitNames) when picking the key, otherwise we log with the
-            // wrong key and end up with NPE when mat is null.
-            String matrixKey = useValuesOnly ? "comparisonMatrixValues" : "comparisonMatrix";
-            List<?> mat = (List<?>) enrichedData.get(matrixKey);
-            if (mat == null) {
-                log.warn("Plan comparison auto-transformation produced no matrix for key '{}'; " +
-                         "the request data may not contain expected matrix.", matrixKey);
-            } else {
-                log.info("Plan comparison matrix auto-injection complete. Matrix dimensions: {} rows x {} columns", 
-                    mat.size(),
-                    mat.isEmpty() ? 0 : ((List<?>) mat.get(0)).size());
             }
         } catch (Exception e) {
-            log.error("Error during auto-transformation of plan data, proceeding without transformation", e);
-            // Don't fail the entire generation if auto-transformation has issues
-            // The rendering may still work with raw plan data or may fail with a more specific error
+            log.warn("Error extracting columnSpacing from section config, deferring to template", e);
+        }
+        return getColumnSpacingFromTemplate(template);
+    }
+
+    /**
+     * Apply any transformer specified either at the template level or the
+     * individual section level.  Operates on a copy of the supplied data map
+     * and returns the potentially-enriched map.
+     */
+    private Map<String,Object> applySectionTransform(Map<String,Object> originalData,
+                                                     DocumentTemplate template,
+                                                     PageSection section,
+                                                     int columnSpacing) {
+        Map<String,Object> data = new HashMap<>(originalData != null ? originalData : new HashMap<>());
+        // build combined config: template first, then override with section values
+        Map<String,Object> combined = new HashMap<>();
+        if (template.getConfig() != null) combined.putAll(template.getConfig());
+        if (section != null && section.getConfig() != null) combined.putAll(section.getConfig());
+
+        boolean wantsTransform = false;
+        if (combined.containsKey("transformer") && "plan-comparison".equals(combined.get("transformer"))) {
+            wantsTransform = true;
+        }
+        // legacy: if no explicit transformer, fall back to templateId prefix
+        if (!wantsTransform && template.getTemplateId() != null && template.getTemplateId().startsWith("plan-comparison")) {
+            wantsTransform = true;
+        }
+        if (!wantsTransform) {
+            return data;
+        }
+
+        // determine value-only or name-match behaviour using combined config
+        boolean valuesOnly = false;
+        boolean matchNames = false;
+        if (combined.containsKey("valuesOnly") && combined.get("valuesOnly") instanceof Boolean) {
+            valuesOnly = (Boolean) combined.get("valuesOnly");
+        }
+        if (combined.containsKey("matchBenefitNamesInTemplate") && combined.get("matchBenefitNamesInTemplate") instanceof Boolean) {
+            matchNames = (Boolean) combined.get("matchBenefitNamesInTemplate");
+        }
+        boolean useValues = valuesOnly || matchNames;
+
+        // check if there is any plan data present (used to decide whether to override
+        // an existing matrix).  We evaluate the same path we'll use later so the
+        // logic stays in sync; having to compute it twice is a minor cost.
+        boolean hasPlans = false;
+        Object plansPreview;
+        if (combined.containsKey("plansPath") && combined.get("plansPath") instanceof String) {
+            String path = (String) combined.get("plansPath");
+            FieldMappingStrategy json = new com.example.demo.docgen.mapper.JsonPathMappingStrategy();
+            plansPreview = json.evaluatePath(data, path);
+        } else {
+            plansPreview = data.get("plans");
+        }
+        if (plansPreview instanceof List && !((List<?>) plansPreview).isEmpty()) {
+            hasPlans = true;
+        }
+
+        // skip transforming only when a matrix already exists *and* there is no
+        // plan data to generate a new one.  This allows clients to post fresh
+        // plan lists and have the transformer overwrite stale matrices.
+        if (!hasPlans && ((useValues && data.containsKey("comparisonMatrixValues")) ||
+                (!useValues && data.containsKey("comparisonMatrix")))) {
+            log.debug("Section {} already has appropriate matrix and no plans present, skipping transform", section == null ? "<none>" : section.getSectionId());
+            return data;
+        }
+
+        // locate plans array via plansPath or default
+        Object plansObj;
+        if (combined.containsKey("plansPath") && combined.get("plansPath") instanceof String) {
+            String path = (String) combined.get("plansPath");
+            FieldMappingStrategy json = new com.example.demo.docgen.mapper.JsonPathMappingStrategy();
+            plansObj = json.evaluatePath(data, path);
+        } else {
+            plansObj = data.get("plans");
+        }
+        if (!(plansObj instanceof List)) {
+            return data;
+        }
+        @SuppressWarnings("unchecked")
+        List<Map<String,Object>> plans = (List<Map<String,Object>>) plansObj;
+        if (plans.isEmpty()) {
+            return data;
+        }
+
+        log.info("Auto-transforming plan data into comparison matrix for section {} (template {}), spacing={}, valuesOnly={}, matchNames={}",
+                section == null ? "<none>" : section.getSectionId(), template.getTemplateId(), columnSpacing, valuesOnly, matchNames);
+
+        if (useValues) {
+            return PlanComparisonTransformer.injectComparisonMatrixValuesOnly(data, plans, "name", "value", columnSpacing);
+        } else {
+            return PlanComparisonTransformer.injectComparisonMatrix(data, plans, "name", "value", columnSpacing);
         }
     }
 }

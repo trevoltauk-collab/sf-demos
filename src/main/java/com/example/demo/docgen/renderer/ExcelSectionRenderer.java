@@ -91,10 +91,27 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
                 // Reuse existing workbook from previous section (same template)
                 workbook = (org.apache.poi.ss.usermodel.Workbook) existingWb;
                 log.debug("Reusing existing Excel workbook from previous section (same template: {})", section.getTemplatePath());
+
+                // clone the first sheet so each section gets its own copy
+                Sheet original = workbook.getSheetAt(0);
+                Sheet clone = workbook.cloneSheet(workbook.getSheetIndex(original));
+                // give it a meaningful name if possible (sectionId or fallback to index)
+                int newIdx = workbook.getSheetIndex(clone);
+                String newName = section.getSectionId() != null ? section.getSectionId() : "Sheet" + newIdx;
+                try {
+                    workbook.setSheetName(newIdx, newName);
+                } catch (IllegalArgumentException e) {
+                    // name already in use, ignore
+                }
+                // mark the active sheet index for mapping in fillExcelCells
+                context.setMetadata("excelCurrentSheetIndex", newIdx);
+
             } else {
                 // Load fresh template (first section or different template path)
                 workbook = loadTemplateAsWorkbook(section.getTemplatePath(), context);
                 context.setMetadata("excelTemplateLastPath", section.getTemplatePath());
+                // first sheet will be the one we fill
+                context.setMetadata("excelCurrentSheetIndex", 0);
                 log.debug("Loaded fresh Excel template: {}", section.getTemplatePath());
             }
             
@@ -458,11 +475,11 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
                         if (key.contains(":")) {
                             // Range mapping (e.g., Sheet1!A2:A6 or A2:A6)
                             boolean matchNames = Boolean.TRUE.equals(group.getMatchBenefitNamesInTemplate());
-                            applyRangeMapping(workbook, key, strategy.evaluatePath(context.getData(), expression), Boolean.TRUE.equals(section.getOverwrite()), matchNames);
+                            applyRangeMapping(workbook, key, strategy.evaluatePath(context.getData(), expression), Boolean.TRUE.equals(section.getOverwrite()), matchNames, context);
                         } else {
                             // Single cell mapping
                             String value = strategy.mapFromContext(context.getData(), Collections.singletonMap(key, expression)).getOrDefault(key, "");
-                            setCellValue(workbook, key, value);
+                            setCellValue(workbook, key, value, context);
                         }
                     } catch (Exception e) {
                         log.warn("Failed to apply mapping {} -> {}: {}", key, expression, e.getMessage());
@@ -480,10 +497,10 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
             try {
                 if (key.contains(":")) {
                     boolean matchNames = Boolean.TRUE.equals(section.getMatchBenefitNamesInTemplate());
-                    applyRangeMapping(workbook, key, strategy.evaluatePath(context.getData(), expression), Boolean.TRUE.equals(section.getOverwrite()), matchNames);
+                    applyRangeMapping(workbook, key, strategy.evaluatePath(context.getData(), expression), Boolean.TRUE.equals(section.getOverwrite()), matchNames, context);
                 } else {
                     String value = strategy.mapFromContext(context.getData(), Collections.singletonMap(key, expression)).getOrDefault(key, "");
-                    setCellValue(workbook, key, value);
+                    setCellValue(workbook, key, value, context);
                 }
             } catch (Exception e) {
                 log.warn("Failed to apply mapping {} -> {}: {}", key, expression, e.getMessage());
@@ -500,7 +517,8 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
      *                                     if false, auto-generate benefit names from incoming data (first column)
      */
     @SuppressWarnings("unchecked")
-    private void applyRangeMapping(Workbook workbook, String rangeKey, Object value, boolean overwrite, boolean matchBenefitNamesInTemplate) {
+    // now accepts context so that sheet selection can honor the active index
+    private void applyRangeMapping(Workbook workbook, String rangeKey, Object value, boolean overwrite, boolean matchBenefitNamesInTemplate, RenderContext context) {
         // Parse sheet and start/end cell
         String sheetName = null;
         String range = rangeKey;
@@ -519,7 +537,23 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
         String start = parts[0].trim();
         String end = parts[1].trim();
 
-        Sheet sheet = sheetName != null ? workbook.getSheet(sheetName) : workbook.getSheetAt(0);
+        Sheet sheet;
+        if (sheetName != null) {
+            sheet = workbook.getSheet(sheetName);
+        } else {
+            // if a specific sheet index was stored in context (due to cloning), use that
+            Object idxObj = context.getMetadata("excelCurrentSheetIndex");
+            if (idxObj instanceof Integer) {
+                int idx = (Integer) idxObj;
+                if (idx >= 0 && idx < workbook.getNumberOfSheets()) {
+                    sheet = workbook.getSheetAt(idx);
+                } else {
+                    sheet = workbook.getSheetAt(0);
+                }
+            } else {
+                sheet = workbook.getSheetAt(0);
+            }
+        }
         if (sheet == null) {
             log.warn("Sheet '{}' not found for range {}", sheetName, rangeKey);
             return;
@@ -723,11 +757,16 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
      * Set a cell value by reference
      * Supports formats: "A1", "Sheet1!A1", "Sheet1.A1"
      */
-    private void setCellValue(Workbook workbook, String cellRef, String value) {
+    /**
+     * Set a single cell value, respecting the current sheet index stored in the
+     * context when no sheet name is provided. The legacy overload delegates here
+     * with a null context (no indexing).
+     */
+    private void setCellValue(Workbook workbook, String cellRef, String value, RenderContext context) {
         // Parse cell reference
         String sheetName = null;
         String cellAddress = cellRef;
-        
+
         // Handle sheet-qualified references like "Sheet1!A1" or "Sheet1.A1"
         if (cellRef.contains("!")) {
             String[] parts = cellRef.split("!");
@@ -738,7 +777,7 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
             sheetName = parts[0].trim();
             cellAddress = parts[1].trim();
         }
-        
+
         // Get sheet (default to first sheet if not specified)
         Sheet sheet;
         if (sheetName != null) {
@@ -748,9 +787,23 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
                 return;
             }
         } else {
-            sheet = workbook.getSheetAt(0);
+            if (context != null) {
+                Object idxObj = context.getMetadata("excelCurrentSheetIndex");
+                if (idxObj instanceof Integer) {
+                    int idx = (Integer) idxObj;
+                    if (idx >= 0 && idx < workbook.getNumberOfSheets()) {
+                        sheet = workbook.getSheetAt(idx);
+                    } else {
+                        sheet = workbook.getSheetAt(0);
+                    }
+                } else {
+                    sheet = workbook.getSheetAt(0);
+                }
+            } else {
+                sheet = workbook.getSheetAt(0);
+            }
         }
-        
+
         // Parse cell address
         try {
             CellReference cellReference = new CellReference(cellAddress);
@@ -758,12 +811,12 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
             if (row == null) {
                 row = sheet.createRow(cellReference.getRow());
             }
-            
+
             Cell cell = row.getCell(cellReference.getCol());
             if (cell == null) {
                 cell = row.createCell(cellReference.getCol());
             }
-            
+
             // Set value (try to parse as number if possible)
             try {
                 double numValue = Double.parseDouble(value);
@@ -775,5 +828,10 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
         } catch (IllegalArgumentException e) {
             log.warn("Invalid cell reference '{}': {}", cellRef, e.getMessage());
         }
+    }
+
+    // backward-compatible overload
+    private void setCellValue(Workbook workbook, String cellRef, String value) {
+        setCellValue(workbook, cellRef, value, null);
     }
 }

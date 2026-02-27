@@ -2,7 +2,15 @@ templateId: plan-comparison
 description: Plan comparison table showing benefits across multiple plans
 
 # Configuration for plan comparison transformation
+# (can also be specified on individual sections instead of globally)
 config:
+  # Logical transformer invoked to prepare data for this template.
+  # Adding this property allows a template to opt in without using a
+  # "plan-comparison"‑prefixed ID.  The only supported value today is
+  # "plan-comparison"; legacy behaviour continues to work by checking the
+  # templateId prefix when this property is absent.
+  transformer: plan-comparison
+
   # Number of columns between plan columns (spacing)
   # Default: 1 (creates [benefit, space, plan1, space, plan2, space, plan3])
   # Can be 0 (no spacing), 2 (wider spacing), etc.

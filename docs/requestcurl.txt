@@ -1,0 +1,14 @@
+ curl -X POST http://localhost:8080/api/documents/generate/excel \
+  -H "Content-Type: application/json" \
+  -d '{
+        "namespace":"common-templates",
+        "templateId":"section-transform",
+        "data":{
+          "plans":[
+            {"planName":"Entry","benefits":[{"name":"Primary Care","value":"$15"},{"name":"Vision","value":"$0 copay"}]},
+            {"planName":"Plus","benefits":[{"name":"Primary Care","value":"Free"},{"name":"Vision","value":"$10"}]}
+          ],
+          "note":"This text should appear on sheet 2"
+        }
+      }' \
+  --output document.xlsx

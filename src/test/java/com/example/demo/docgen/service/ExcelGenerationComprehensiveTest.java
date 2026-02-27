@@ -237,6 +237,43 @@ class ExcelGenerationComprehensiveTest {
                     ))
             );
 
+            // additional scenario: explicit config-driven template (foo-explicit)
+            {
+                byte[] excelBytes2 = performExcelGeneration(
+                        "common-templates",
+                        "foo-explicit",   // ID not starting with "plan-comparison"
+                        requestData
+                );
+                Workbook wb2 = WorkbookFactory.create(new ByteArrayInputStream(excelBytes2));
+                Sheet s2 = wb2.getSheetAt(0);
+                int spacing = 2;
+                int firstPlanCol = 1 + spacing;
+                int secondPlanCol = firstPlanCol + 1 + spacing;
+                assertEquals("Entry", getCellValue(s2,0,firstPlanCol));
+                assertEquals("Plus", getCellValue(s2,0,secondPlanCol));
+                wb2.close();
+                // DEBUG: inspect requestData after server call
+                System.out.println("[DEBUG] requestData after foo-explicit call: " + requestData);
+            }
+
+            // scenario: custom plansPath in template
+            {
+                Map<String,Object> reqData2 = new HashMap<>(requestData);
+                reqData2.put("altPlans", reqData2.remove("plans"));
+                // create a temporary template id that sets plansPath
+                // use existing foo-explicit for convenience
+                byte[] excelBytes3 = performExcelGeneration(
+                        "common-templates",
+                        "foo-explicit",
+                        reqData2
+                );
+                Workbook wb3 = WorkbookFactory.create(new ByteArrayInputStream(excelBytes3));
+                Sheet s3 = wb3.getSheetAt(0);
+                int firstPlanCol = 1 + 2;
+                assertEquals("Entry", getCellValue(s3,0,firstPlanCol));
+                wb3.close();
+            }
+
             // Put plans directly in data WITHOUT calling transformer
             requestData.put("plans", plans);
 
@@ -265,6 +302,27 @@ class ExcelGenerationComprehensiveTest {
             assertEquals("Free", getCellValue(sheet, 1, secondPlanCol));
 
             workbook.close();
+
+            // --- new behaviour: section-level config example ---
+            Map<String, Object> sectionData = new HashMap<>();
+            sectionData.put("plans", plans);
+            sectionData.put("note", "second sheet text");
+
+            byte[] excelBytesSection = performExcelGeneration(
+                    "common-templates",
+                    "section-transform",
+                    sectionData
+            );
+            Workbook wbSection = WorkbookFactory.create(new ByteArrayInputStream(excelBytesSection));
+            // workbook should now have two sheets (template cloned for each section)
+            assertEquals(2, wbSection.getNumberOfSheets(), "Expected two sheets after rendering two sections using same template");
+            // first sheet should contain plan headers
+            Sheet s1 = wbSection.getSheetAt(0);
+            assertEquals("Entry", getCellValue(s1, 0, firstPlanCol));
+            // second sheet should show the note cell at A1
+            Sheet s2 = wbSection.getSheetAt(1);
+            assertEquals("second sheet text", getCellValue(s2, 0, 0));
+            wbSection.close();
         }
 
         /**
