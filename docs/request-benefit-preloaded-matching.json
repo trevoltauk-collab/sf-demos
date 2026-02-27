@@ -1,6 +1,4 @@
- curl -X POST http://localhost:8080/api/documents/generate/excel \
-  -H "Content-Type: application/json" \
-  -d '{
+{
   "namespace": "common-templates",
   "templateId": "plan-comparison-name-matching",
   "data": {
@@ -25,5 +23,3 @@
     ]
   }
 }
-      }' \
-  --output document.xlsx

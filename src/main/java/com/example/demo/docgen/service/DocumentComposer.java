@@ -521,12 +521,12 @@ public class DocumentComposer {
             hasPlans = true;
         }
 
-        // skip transforming only when a matrix already exists *and* there is no
-        // plan data to generate a new one.  This allows clients to post fresh
-        // plan lists and have the transformer overwrite stale matrices.
-        if (!hasPlans && ((useValues && data.containsKey("comparisonMatrixValues")) ||
-                (!useValues && data.containsKey("comparisonMatrix")))) {
-            log.debug("Section {} already has appropriate matrix and no plans present, skipping transform", section == null ? "<none>" : section.getSectionId());
+        // If an appropriate matrix already exists, prefer the provided matrix
+        // and skip the auto-transformation. This lets clients supply precomputed
+        // matrices that should be used even when raw plan data is also present.
+        if ((useValues && data.containsKey("comparisonMatrixValues")) ||
+                (!useValues && data.containsKey("comparisonMatrix"))) {
+            log.debug("Section {} already has appropriate matrix, skipping transform", section == null ? "<none>" : section.getSectionId());
             return data;
         }
 

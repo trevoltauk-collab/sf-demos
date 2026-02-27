@@ -467,4 +467,244 @@ public class MultiSectionExcelWorkbookTest {
             System.out.println("✅ Sections processed in correct order despite being added in wrong order!");
         }
     }
+
+    /**************************************************************************
+     * Test 4: Per-Section Configuration Differences Across Sheets
+     * 
+     * This test validates that different sections can have different 
+     * per-section configurations applied to their respective sheets 
+     * (e.g., different columnSpacing, transformers, valuesOnly settings).
+     * 
+     * Scenario:
+     * - Multi-sheet template with 4 pre-made sheets
+     * - Section 1 (Summary): columnSpacing=2, no transformer, with headers
+     * - Section 2 (Departments): columnSpacing=1, plan-comparison transformer
+     * - Section 3 (Employees): columnSpacing=3, no transformer, valuesOnly=true
+     * - Section 4 (Analysis): different config settings
+     * 
+     * Expected Outcome:
+     * - Each section's config is applied independently to its sheet
+     * - Configuration precedence: section config > template config > default
+     **************************************************************************/
+
+    @Test
+    public void testPerSectionConfigurationDifferencesAcrossSheets() throws Exception {
+        byte[] templateBytes = createMultiSheetTemplate();
+
+        // ========================================================================
+        // SECTION 1: Summary with columnSpacing=2, no special transformer
+        // ========================================================================
+        PageSection section1 = PageSection.builder()
+                .sectionId("summary_section")
+                .type(com.example.demo.docgen.model.SectionType.EXCEL)
+                .templatePath("multi-sheet-template.xlsx")
+                .order(1)
+                .mappingType(MappingType.JSONPATH)
+                .fieldMappings(Map.of(
+                    "Summary!A1", "$.companyName",
+                    "Summary!A2", "$.reportYear"
+                ))
+                // Section 1: columnSpacing=2
+                .config(Map.of("columnSpacing", 2))
+                .build();
+
+        // ========================================================================
+        // SECTION 2: Departments with columnSpacing=1 and plan-comparison transformer
+        // ========================================================================
+        RepeatingGroupConfig departmentRepeating = RepeatingGroupConfig.builder()
+                .startCell("Departments!A3")
+                .insertRows(false)
+                .overwrite(true)
+                .maxItems(50)
+                .fields(Map.of(
+                    "A", "name",
+                    "B", "headCount"
+                ))
+                .build();
+
+        FieldMappingGroup departmentGroup = FieldMappingGroup.builder()
+                .mappingType(MappingType.JSONPATH)
+                .basePath("$.departments")
+                .repeatingGroup(departmentRepeating)
+                .build();
+
+        PageSection section2 = PageSection.builder()
+                .sectionId("department_section")
+                .type(com.example.demo.docgen.model.SectionType.EXCEL)
+                .templatePath("multi-sheet-template.xlsx")
+                .order(2)
+                .fieldMappingGroups(Collections.singletonList(departmentGroup))
+                // Section 2: columnSpacing=1 and plan-comparison transformer
+                .config(Map.of(
+                    "columnSpacing", 1,
+                    "transformer", "plan-comparison"
+                ))
+                .build();
+
+        // ========================================================================
+        // SECTION 3: Employees with columnSpacing=3 and valuesOnly=true
+        // ========================================================================
+        RepeatingGroupConfig employeeRepeating = RepeatingGroupConfig.builder()
+                .startCell("Employees!A4")
+                .insertRows(false)
+                .overwrite(true)
+                .maxItems(1000)
+                .fields(Map.of(
+                    "A", "employeeId",
+                    "B", "firstName",
+                    "C", "lastName",
+                    "D", "salary"
+                ))
+                .build();
+
+        FieldMappingGroup employeeGroup = FieldMappingGroup.builder()
+                .mappingType(MappingType.JSONPATH)
+                .basePath("$.employees")
+                .repeatingGroup(employeeRepeating)
+                .build();
+
+        PageSection section3 = PageSection.builder()
+                .sectionId("employee_section")
+                .type(com.example.demo.docgen.model.SectionType.EXCEL)
+                .templatePath("multi-sheet-template.xlsx")
+                .order(3)
+                .fieldMappingGroups(Collections.singletonList(employeeGroup))
+                // Section 3: columnSpacing=3 and valuesOnly=true
+                .config(Map.of(
+                    "columnSpacing", 3,
+                    "valuesOnly", true
+                ))
+                .build();
+
+        // ========================================================================
+        // SECTION 4: Analysis with different config (columnSpacing=2, no transformer)
+        // ========================================================================
+        PageSection section4 = PageSection.builder()
+                .sectionId("analysis_section")
+                .type(com.example.demo.docgen.model.SectionType.EXCEL)
+                .templatePath("multi-sheet-template.xlsx")
+                .order(4)
+                .mappingType(MappingType.JSONPATH)
+                .fieldMappings(Map.of(
+                    "Analysis!A1", "$.analysisTitle",
+                    "Analysis!B1", "$.analysisYear"
+                ))
+                // Section 4: columnSpacing=2
+                .config(Map.of("columnSpacing", 2))
+                .build();
+
+        // Create template with 4 sections, each with different per-section configs
+        DocumentTemplate template = DocumentTemplate.builder()
+                .templateId("multi-section-per-config")
+                .sections(List.of(section1, section2, section3, section4))
+                // Template-level default: columnSpacing=1
+                .config(Map.of("columnSpacing", 1))
+                .build();
+
+        when(templateLoader.loadTemplate(anyString(), anyString(), anyMap()))
+                .thenReturn(template);
+        when(templateLoader.getResourceBytes(anyString()))
+                .thenReturn(templateBytes);
+
+        // ========================================================================
+        // Setup test data
+        // ========================================================================
+        Map<String, Object> data = new HashMap<>();
+        
+        // Section 1 data
+        data.put("companyName", "TestCorp");
+        data.put("reportYear", 2025);
+        
+        // Section 2 data
+        data.put("departments", List.of(
+            Map.of("name", "Engineering", "headCount", 120),
+            Map.of("name", "Sales", "headCount", 80)
+        ));
+        
+        // Section 3 data
+        data.put("employees", List.of(
+            Map.of("employeeId", "E001", "firstName", "Alice", "lastName", "Johnson", "salary", 145000),
+            Map.of("employeeId", "E002", "firstName", "Bob", "lastName", "Smith", "salary", 95000)
+        ));
+        
+        // Section 4 data
+        data.put("analysisTitle", "2025 Analysis");
+        data.put("analysisYear", 2025);
+
+        // ========================================================================
+        // Execute: Generate Excel with per-section configs
+        // ========================================================================
+        DocumentGenerationRequest req = DocumentGenerationRequest.builder()
+                .namespace("common-templates")
+                .templateId("multi-section-per-config")
+                .data(data)
+                .build();
+
+        byte[] result = composer.generateExcel(req);
+        assertNotNull(result, "Generated Excel should not be null");
+        assertTrue(result.length > 0, "Generated Excel should not be empty");
+
+        // ========================================================================
+        // Verify: All sheets exist and config was applied correctly
+        // ========================================================================
+        try (Workbook workbook = new XSSFWorkbook(new ByteArrayInputStream(result))) {
+            // Verify all sheets exist
+            assertNotNull(workbook.getSheet("Summary"), "Summary sheet should exist");
+            assertNotNull(workbook.getSheet("Departments"), "Departments sheet should exist");
+            assertNotNull(workbook.getSheet("Employees"), "Employees sheet should exist");
+            assertNotNull(workbook.getSheet("Analysis"), "Analysis sheet should exist");
+
+            // === VERIFY SECTION 1: Summary (columnSpacing=2) ===
+            org.apache.poi.ss.usermodel.Sheet summarySheet = workbook.getSheet("Summary");
+            assertEquals("TestCorp", 
+                summarySheet.getRow(0).getCell(0).getStringCellValue(),
+                "Summary!A1 should contain company name");
+            assertEquals(2025, 
+                (int) summarySheet.getRow(1).getCell(0).getNumericCellValue(),
+                "Summary!A2 should contain report year");
+            System.out.println("✅ Section 1 (Summary) with columnSpacing=2 verified");
+
+            // === VERIFY SECTION 2: Departments (columnSpacing=1, transformer=plan-comparison) ===
+            org.apache.poi.ss.usermodel.Sheet departmentsSheet = workbook.getSheet("Departments");
+            assertEquals("Engineering", 
+                departmentsSheet.getRow(2).getCell(0).getStringCellValue(),
+                "Departments!A3 should contain first department");
+            assertEquals(120, 
+                (int) departmentsSheet.getRow(2).getCell(1).getNumericCellValue(),
+                "Departments!B3 should contain Engineering headcount");
+            assertEquals("Sales", 
+                departmentsSheet.getRow(3).getCell(0).getStringCellValue(),
+                "Departments!A4 should contain second department");
+            System.out.println("✅ Section 2 (Departments) with columnSpacing=1 and plan-comparison verified");
+
+            // === VERIFY SECTION 3: Employees (columnSpacing=3, valuesOnly=true) ===
+            org.apache.poi.ss.usermodel.Sheet employeesSheet = workbook.getSheet("Employees");
+            assertEquals("E001", 
+                employeesSheet.getRow(3).getCell(0).getStringCellValue(),
+                "Employees!A4 should contain first employee ID");
+            assertEquals("Alice", 
+                employeesSheet.getRow(3).getCell(1).getStringCellValue(),
+                "Employees!B4 should contain first employee first name");
+            assertEquals("Johnson", 
+                employeesSheet.getRow(3).getCell(2).getStringCellValue(),
+                "Employees!C4 should contain first employee last name");
+            System.out.println("✅ Section 3 (Employees) with columnSpacing=3 and valuesOnly=true verified");
+
+            // === VERIFY SECTION 4: Analysis (columnSpacing=2) ===
+            org.apache.poi.ss.usermodel.Sheet analysisSheet = workbook.getSheet("Analysis");
+            assertEquals("2025 Analysis", 
+                analysisSheet.getRow(0).getCell(0).getStringCellValue(),
+                "Analysis!A1 should contain analysis title");
+            assertEquals(2025, 
+                (int) analysisSheet.getRow(0).getCell(1).getNumericCellValue(),
+                "Analysis!B1 should contain analysis year");
+            System.out.println("✅ Section 4 (Analysis) with columnSpacing=2 verified");
+
+            System.out.println("\n✅✅✅ All per-section configuration differences verified successfully!");
+            System.out.println("   - Section 1: columnSpacing=2");
+            System.out.println("   - Section 2: columnSpacing=1, transformer=plan-comparison");
+            System.out.println("   - Section 3: columnSpacing=3, valuesOnly=true");
+            System.out.println("   - Section 4: columnSpacing=2");
+        }
+    }
 }

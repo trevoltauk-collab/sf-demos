@@ -1,0 +1,15 @@
+{
+  "namespace": "common-templates",
+  "templateId": "multi-sheet-example.yaml",
+  "data": {
+    "customers": [
+      { "name": "Alice", "email": "alice@example.com" },
+      { "name": "Bob", "email": "bob@example.com" }
+    ],
+    "pricingTable": [
+      ["Tier", "Price", "Notes"],
+      ["Standard", "$10", ""],
+      ["Pro", "$20", ""]
+    ]
+  }
+}

@@ -92,19 +92,33 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
                 workbook = (org.apache.poi.ss.usermodel.Workbook) existingWb;
                 log.debug("Reusing existing Excel workbook from previous section (same template: {})", section.getTemplatePath());
 
-                // clone the first sheet so each section gets its own copy
-                Sheet original = workbook.getSheetAt(0);
-                Sheet clone = workbook.cloneSheet(workbook.getSheetIndex(original));
-                // give it a meaningful name if possible (sectionId or fallback to index)
-                int newIdx = workbook.getSheetIndex(clone);
-                String newName = section.getSectionId() != null ? section.getSectionId() : "Sheet" + newIdx;
-                try {
-                    workbook.setSheetName(newIdx, newName);
-                } catch (IllegalArgumentException e) {
-                    // name already in use, ignore
+                // Decision: Clone sheet only for single-sheet templates
+                // For multi-sheet templates, sheets already exist - don't clone
+                boolean isMultiSheetTemplate = workbook.getNumberOfSheets() > 1;
+                
+                if (isMultiSheetTemplate) {
+                    // Multi-sheet template: sheets are already pre-created in template
+                    // Don't clone - instead, write to sheets by name using qualified cell refs
+                    log.debug("Multi-sheet template detected ({} sheets). Skipping clone, will write to named sheets", 
+                             workbook.getNumberOfSheets());
+                    // Don't change excelCurrentSheetIndex - let fillExcelCells use qualified refs like "Summary!A1"
+                    // If no qualified ref is used, it will fall back to Sheet0
+                } else {
+                    // Single-sheet template: must clone for each section
+                    Sheet original = workbook.getSheetAt(0);
+                    Sheet clone = workbook.cloneSheet(workbook.getSheetIndex(original));
+                    // give it a meaningful name if possible (sectionId or fallback to index)
+                    int newIdx = workbook.getSheetIndex(clone);
+                    String newName = section.getSectionId() != null ? section.getSectionId() : "Sheet" + newIdx;
+                    try {
+                        workbook.setSheetName(newIdx, newName);
+                    } catch (IllegalArgumentException e) {
+                        // name already in use, ignore
+                    }
+                    // mark the active sheet index for mapping in fillExcelCells
+                    context.setMetadata("excelCurrentSheetIndex", newIdx);
+                    log.debug("Single-sheet template detected. Cloned sheet for section: {}", section.getSectionId());
                 }
-                // mark the active sheet index for mapping in fillExcelCells
-                context.setMetadata("excelCurrentSheetIndex", newIdx);
 
             } else {
                 // Load fresh template (first section or different template path)
@@ -456,6 +470,8 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
      * Supports cell references like "A1", "B5", "Sheet2!C10" or named ranges
      */
     private void fillExcelCells(Workbook workbook, PageSection section, RenderContext context) {
+        log.debug("fillExcelCells: sectionId={} mappingType={} fieldMappings={} groups={}",
+            section.getSectionId(), section.getMappingType(), section.getFieldMappings(), section.getFieldMappingGroups());
         // If multiple mapping groups are defined, process each group (gives access to mappingType and repeatingGroup)
         if (section.hasMultipleMappingGroups()) {
             for (FieldMappingGroup group : section.getFieldMappingGroups()) {
@@ -494,12 +510,16 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
         for (Map.Entry<String, String> mapping : section.getFieldMappings().entrySet()) {
             String key = mapping.getKey();
             String expression = mapping.getValue();
+            log.debug("Processing mapping key='{}' expr='{}'", key, expression);
             try {
                 if (key.contains(":")) {
                     boolean matchNames = Boolean.TRUE.equals(section.getMatchBenefitNamesInTemplate());
-                    applyRangeMapping(workbook, key, strategy.evaluatePath(context.getData(), expression), Boolean.TRUE.equals(section.getOverwrite()), matchNames, context);
+                    Object eval = strategy.evaluatePath(context.getData(), expression);
+                    log.debug("Evaluated expression '{}' => {} (class={})", expression, eval, eval != null ? eval.getClass().getName() : "null");
+                    applyRangeMapping(workbook, key, eval, Boolean.TRUE.equals(section.getOverwrite()), matchNames, context);
                 } else {
                     String value = strategy.mapFromContext(context.getData(), Collections.singletonMap(key, expression)).getOrDefault(key, "");
+                    log.debug("Single-cell value for key '{}' = '{}'", key, value);
                     setCellValue(workbook, key, value, context);
                 }
             } catch (Exception e) {

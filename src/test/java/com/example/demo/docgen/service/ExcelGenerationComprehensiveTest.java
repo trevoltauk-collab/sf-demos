@@ -237,6 +237,9 @@ class ExcelGenerationComprehensiveTest {
                     ))
             );
 
+            // Add plans to request data
+            requestData.put("plans", plans);
+
             // additional scenario: explicit config-driven template (foo-explicit)
             {
                 byte[] excelBytes2 = performExcelGeneration(
@@ -246,6 +249,10 @@ class ExcelGenerationComprehensiveTest {
                 );
                 Workbook wb2 = WorkbookFactory.create(new ByteArrayInputStream(excelBytes2));
                 Sheet s2 = wb2.getSheetAt(0);
+                // print header cells for debugging
+                for (int c = 0; c < 10; c++) {
+                    System.out.println("[DEBUG] header cell(0," + c + ") = '" + getCellValue(s2, 0, c) + "'");
+                }
                 int spacing = 2;
                 int firstPlanCol = 1 + spacing;
                 int secondPlanCol = firstPlanCol + 1 + spacing;
@@ -275,8 +282,6 @@ class ExcelGenerationComprehensiveTest {
             }
 
             // Put plans directly in data WITHOUT calling transformer
-            requestData.put("plans", plans);
-
             byte[] excelBytes = performExcelGeneration(
                     "common-templates",
                     "plan-comparison",
