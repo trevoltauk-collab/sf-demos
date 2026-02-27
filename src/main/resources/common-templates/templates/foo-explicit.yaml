@@ -1,4 +1,4 @@
-templateId: foo-explicit
+templateId: plan-comparison-explicit-plans
 description: Template that uses transformer property to trigger plan-comparison logic
 
 config:

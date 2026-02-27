@@ -15,7 +15,7 @@ config:
   # Default: 1 (creates [benefit, space, plan1, space, plan2, space, plan3])
   # Can be 0 (no spacing), 2 (wider spacing), etc.
   # Increased to 2 to provide an extra empty column between benefit and plan values
-  columnSpacing: 2
+  columnSpacing: 0
 
 sections:
   - sectionId: plan_comparison

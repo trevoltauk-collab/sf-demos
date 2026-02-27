@@ -104,6 +104,7 @@ public class PlanAgeRatingMatrixTest {
 
         // body rows: build three independent vertical blocks.  Each block begins
         // at the same row so the top of every band aligns horizontally.
+        
         int band1Size = 31;             // ages 0..30
         int band2Size = 17;             // ages 31..47
         int band3Size = 17;             // 48..64 (we'll render 17 rows representing 48..64+)
@@ -153,48 +154,80 @@ public class PlanAgeRatingMatrixTest {
         return matrix;
     }
 
+    /**
+     * Generate age ratings for all ages in a range (e.g., 0-30, 31-47, 48-64+)
+     * with ratings that increase by baseIncrementPerAge.
+     */
+    private List<Map<String,Object>> generateAgeRatingsForRange(int startAge, int endAge, int baseRating, int incrementPerAge) {
+        List<Map<String,Object>> ratings = new ArrayList<>();
+        for (int age = startAge; age <= endAge; age++) {
+            int rating = baseRating + (age - startAge) * incrementPerAge;
+            ratings.add(Map.of("age", age, "rating", rating));
+        }
+        return ratings;
+    }
+
     @Test
     public void testAgeRatingMatrixGeneration() throws Exception {
         byte[] templateBytes = createAgeRatingTemplate();
 
-        // simple two‑plan payload
+        // Generate age ratings for all ages in each band
+        // Band 1: ages 0-30 (31 ages), Band 2: ages 31-47 (17 ages), Band 3: ages 48-64 (17 ages)
+        List<Map<String,Object>> plan1Ratings = new ArrayList<>();
+        plan1Ratings.addAll(generateAgeRatingsForRange(0, 30, 100, 10));      // ages 0-30: 100 to 400
+        plan1Ratings.addAll(generateAgeRatingsForRange(31, 47, 410, 10));     // ages 31-47: 410 to 570
+        plan1Ratings.addAll(generateAgeRatingsForRange(48, 64, 600, 15));     // ages 48-64: 600 to 840
+
+        List<Map<String,Object>> plan2Ratings = new ArrayList<>();
+        plan2Ratings.addAll(generateAgeRatingsForRange(0, 30, 90, 8));        // ages 0-30: 90 to 330
+        plan2Ratings.addAll(generateAgeRatingsForRange(31, 47, 340, 9));      // ages 31-47: 340 to 484
+        plan2Ratings.addAll(generateAgeRatingsForRange(48, 64, 500, 12));     // ages 48-64: 500 to 692
+
         Map<String,Object> plan1 = Map.of(
                 "planName", "Silver",
                 "contractCode", "S001",
                 "network", "Nat",
-                "ageRatings", List.of(
-                        Map.of("age", 0, "rating", 100),
-                        Map.of("age", 1, "rating", 110),
-                        Map.of("age", 30, "rating", 400),
-                        Map.of("age", 31, "rating", 410),
-                        Map.of("age", 47, "rating", 570),
-                        Map.of("age", 48, "rating", 600),
-                        Map.of("age", 65, "rating", 850)
-                )
+                "ageRatings", plan1Ratings
         );
         Map<String,Object> plan2 = Map.of(
                 "planName", "Gold",
                 "contractCode", "G002",
                 "network", "Intl",
-                "ageRatings", List.of(
-                        Map.of("age", 0, "rating", 90),
-                        Map.of("age", 15, "rating", 150),
-                        Map.of("age", 32, "rating", 320),
-                        Map.of("age", 48, "rating", 480),
-                        Map.of("age", 64, "rating", 640)
-                )
+                "ageRatings", plan2Ratings
         );
         List<Map<String,Object>> plans = List.of(plan1, plan2);
 
         List<List<Object>> matrix = buildAgeRatingMatrix(plans, 1);
         assertFalse(matrix.isEmpty(), "matrix should not be empty");
-        // verify first header row contains plan names
+        
+        // Verify headers
         assertEquals("Silver", matrix.get(0).get(0));
-        int colsPerPlan = 1 + (2 * 3) + 1; // name + 3*(age+rating) + spacing
-        assertEquals("Gold", matrix.get(0).get(colsPerPlan));
-        // verify second header row contains network/contract combination
         assertEquals("Nat / S001", matrix.get(1).get(0));
-        assertEquals("Intl / G002", matrix.get(1).get(colsPerPlan));
+        
+        // Verify band headers (Age/Rating labels in row 2)
+        assertEquals("Age", matrix.get(2).get(0));
+        assertEquals("Rating", matrix.get(2).get(1));
+        
+        // Band layout per plan (columnSpacing=1):
+        // Band 1: cols 0-2 (age, rating, spacing)
+        // Band 2: cols 3-5 (age, rating, spacing)
+        // Band 3: cols 6-8 (age, rating, spacing)
+        
+        // Verify Band 1 data (ages 0-30): body starts at row 3, rowIndex 0 = age 0
+        assertEquals(0, matrix.get(3).get(0), "Age 0 should be at row 3, col 0");
+        assertEquals(100, matrix.get(3).get(1), "Silver age 0 rating should be 100");
+        
+        // Age 30: rowIndex=30 -> row 33 (3 headers + 30)
+        assertEquals(30, matrix.get(33).get(0), "Age 30 should be at row 33, col 0");
+        assertEquals(400, matrix.get(33).get(1), "Silver age 30 rating should be 400");
+        
+        // Verify Band 2 data (ages 31-47): cols 3-4
+        assertEquals(31, matrix.get(3).get(3), "Age 31 (band 2) should be at row 3, col 3");
+        assertEquals(410, matrix.get(3).get(4), "Silver age 31 rating should be 410");
+        
+        // Verify Band 3 data (ages 48-64): cols 6-7
+        assertEquals(48, matrix.get(3).get(6), "Age 48 (band 3) should be at row 3, col 6");
+        assertEquals(600, matrix.get(3).get(7), "Silver age 48 rating should be 600");
 
         // turn the matrix into request data
         Map<String,Object> data = Map.of("comparisonMatrix", matrix);
@@ -223,13 +256,35 @@ public class PlanAgeRatingMatrixTest {
         assertNotNull(result);
 
         try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(result))) {
-            // verify a couple of core values and the headers are where we expect
+            // Verify headers
             assertEquals("Silver", wb.getSheetAt(0).getRow(0).getCell(0).getStringCellValue());
-            // age 0 rating for first plan should be 100 (body starts at row 3)
-            assertEquals(100.0, wb.getSheetAt(0).getRow(3).getCell(1).getNumericCellValue());
-            // spot-check one additional body cell - now at row 51 because of extra header
-            Cell maybe = wb.getSheetAt(0).getRow(51).getCell(5);
-            assertNotNull(maybe);
+            assertEquals("Nat / S001", wb.getSheetAt(0).getRow(1).getCell(0).getStringCellValue());
+            
+            // Column layout: Band 1 (cols 0-2), Band 2 (cols 3-5), Band 3 (cols 6-8)
+            // Verify Band 1: Age 0 at row 3, cols 0-1
+            assertEquals(0.0, wb.getSheetAt(0).getRow(3).getCell(0).getNumericCellValue(), 
+                    "Age 0 should be at row 3, col 0");
+            assertEquals(100.0, wb.getSheetAt(0).getRow(3).getCell(1).getNumericCellValue(),
+                    "Silver rating for age 0 should be 100");
+            
+            // Verify Band 1: Age 30 at row 33, cols 0-1
+            assertEquals(30.0, wb.getSheetAt(0).getRow(33).getCell(0).getNumericCellValue(),
+                    "Age 30 should be at row 33, col 0");
+            assertEquals(400.0, wb.getSheetAt(0).getRow(33).getCell(1).getNumericCellValue(),
+                    "Silver rating for age 30 should be 400");
+            
+            // Verify Band 2: Age 31 at row 3, cols 3-4
+            assertEquals(31.0, wb.getSheetAt(0).getRow(3).getCell(3).getNumericCellValue(),
+                    "Age 31 (band 2) should be at row 3, col 3");
+            assertEquals(410.0, wb.getSheetAt(0).getRow(3).getCell(4).getNumericCellValue(),
+                    "Silver rating for age 31 should be 410");
+            
+            // Verify Band 3: Age 48 at row 3, cols 6-7
+            assertEquals(48.0, wb.getSheetAt(0).getRow(3).getCell(6).getNumericCellValue(),
+                    "Age 48 (band 3) should be at row 3, col 6");
+            assertEquals(600.0, wb.getSheetAt(0).getRow(3).getCell(7).getNumericCellValue(),
+                    "Silver rating for age 48 should be 600");
+
 
             // merge header cells horizontally so network/contract spans all three bands per plan
             org.apache.poi.ss.usermodel.Sheet sheet = wb.getSheetAt(0);

@@ -13,26 +13,26 @@ description: Plan comparison with name-based benefit matching (Mode 1)
 
 # Configuration for plan comparison transformation
 config:
-  columnSpacing: 1
+  columnSpacing: 0
   # When true, DocumentComposer injects comparisonMatrixValues (used when
   # the template already contains benefit names in column A). When false,
   # the full matrix (including the "Benefit" column) will be injected and
   # written into the worksheet (auto-generating benefit names).
-  matchBenefitNamesInTemplate: false
+  matchBenefitNamesInTemplate: true
 
 sections:
   - sectionId: plan_comparison
     type: EXCEL
-    templatePath: comparison-template.xlsx
+    templatePath: comparison-template-prefilled.xlsx
     mappingType: JSONPATH
 
     # For this template we want auto-generated benefit names (template does
     # not pre-populate them), therefore name matching is disabled.
-    matchBenefitNamesInTemplate: false
+    matchBenefitNamesInTemplate: true
 
     fieldMappings:
       # Map comparison matrix including the Benefit column into the full
       # range so that the first column is populated with benefit names.
-      "A1:G6": "$.comparisonMatrix"
+      "B1:G6": "$.comparisonMatrixValues"
 
     overwrite: true

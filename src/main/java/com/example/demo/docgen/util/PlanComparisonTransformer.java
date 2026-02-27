@@ -314,5 +314,277 @@ public class PlanComparisonTransformer {
         result.put("comparisonMatrixValues", matrix);
         return result;
     }
+
+    /**
+     * Transform plans with age-rating data into a 3-band age rating matrix.
+     * 
+     * Expected plan structure:
+     * {
+     *   "planName": "Silver",
+     *   "network": "Nat",
+     *   "contractCode": "S001",
+     *   "ageRatings": [ { "age": 0, "rating": 100 }, { "age": 1, "rating": 110 }, ... ]
+     * }
+     * 
+     * Output matrix has 3 horizontal bands with age/rating columns for each:
+     * - Band 1: ages 0-30
+     * - Band 2: ages 31-47
+     * - Band 3: ages 48-64+
+     * 
+     * For N plans with columnSpacing=1, each band produces 3 columns (age, rating, space) per plan.
+     * 
+     * @param plans List of plans with ageRatings field
+     * @param ageField Field name for age value (default: "age")
+     * @param ratingField Field name for rating value (default: "rating")
+     * @param columnSpacingWidth Number of empty columns between bands (default: 1)
+     * @return 2D matrix (List<List<Object>>) with 3 bands horizontally arranged
+     */
+    public static List<List<Object>> transformAgeRatingsToMatrix(
+            List<Map<String, Object>> plans,
+            String ageField,
+            String ratingField,
+            int columnSpacingWidth) {
+
+        if (plans == null || plans.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // Age bands: [0-30], [31-47], [48-64+]
+        // Find max age to detect band sizes dynamically
+        List<Map<String, Object>> allAges = new ArrayList<>();
+        for (Map<String, Object> plan : plans) {
+            List<Map<String, Object>> ageRatings = (List<Map<String, Object>>) plan.get("ageRatings");
+            if (ageRatings != null) {
+                allAges.addAll(ageRatings);
+            }
+        }
+
+        // Group ages into bands
+        List<Integer> band1Ages = new ArrayList<>();
+        List<Integer> band2Ages = new ArrayList<>();
+        List<Integer> band3Ages = new ArrayList<>();
+
+        for (Map<String, Object> item : allAges) {
+            Object ageObj = item.get(ageField);
+            if (ageObj instanceof Number) {
+                int age = ((Number) ageObj).intValue();
+                if (age <= 30) {
+                    band1Ages.add(age);
+                } else if (age <= 47) {
+                    band2Ages.add(age);
+                } else {
+                    band3Ages.add(age);
+                }
+            }
+        }
+
+        // Sort and deduplicate
+        band1Ages = new ArrayList<>(new TreeSet<>(band1Ages));
+        band2Ages = new ArrayList<>(new TreeSet<>(band2Ages));
+        band3Ages = new ArrayList<>(new TreeSet<>(band3Ages));
+
+        // Extract plan names and ageRating maps
+        List<String> planNames = plans.stream()
+                .map(p -> (String) p.get("planName"))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        List<String> planCodes = plans.stream()
+                .map(p -> {
+                    String network = (String) p.get("network");
+                    String code = (String) p.get("contractCode");
+                    return (network != null ? network : "") + " / " + (code != null ? code : "");
+                })
+                .collect(Collectors.toList());
+
+        // Build age-to-rating maps for each plan
+        Map<String, Map<Integer, Object>> planAgeRatingMap = new HashMap<>();
+        for (Map<String, Object> plan : plans) {
+            String planName = (String) plan.get("planName");
+            Map<Integer, Object> ageRatingMap = new HashMap<>();
+
+            List<Map<String, Object>> ageRatings = (List<Map<String, Object>>) plan.get("ageRatings");
+            if (ageRatings != null) {
+                for (Map<String, Object> item : ageRatings) {
+                    Object ageObj = item.get(ageField);
+                    Object ratingObj = item.get(ratingField);
+                    if (ageObj instanceof Number) {
+                        int age = ((Number) ageObj).intValue();
+                        ageRatingMap.put(age, ratingObj);
+                    }
+                }
+            }
+
+            planAgeRatingMap.put(planName, ageRatingMap);
+        }
+
+        // Build 3-row header structure
+        List<List<Object>> matrix = new ArrayList<>();
+
+        // Row 0: Plan names (repeated for each band)
+        List<Object> planNameRow = new ArrayList<>();
+        for (String planName : planNames) {
+            planNameRow.add(planName);
+            for (int b = 0; b < (bandStartColumns().length - 1); b++) {
+                planNameRow.add("");
+            }
+        }
+        matrix.add(planNameRow);
+
+        // Row 1: Plan codes (network / contractCode)
+        List<Object> planCodeRow = new ArrayList<>();
+        for (String planCode : planCodes) {
+            planCodeRow.add(planCode);
+            for (int b = 0; b < (bandStartColumns().length - 1); b++) {
+                planCodeRow.add("");
+            }
+        }
+        matrix.add(planCodeRow);
+
+        // Row 2: Band headers (Age/Rating labels)
+        List<Object> bandHeaderRow = new ArrayList<>();
+        int[] bandStarts = bandStartColumns();
+        for (int bandIdx = 0; bandIdx < 3; bandIdx++) {
+            List<Integer> bandAges = (bandIdx == 0) ? band1Ages : (bandIdx == 1) ? band2Ages : band3Ages;
+            for (int planIdx = 0; planIdx < planNames.size(); planIdx++) {
+                if (planIdx == 0 && bandIdx == 0) {
+                    // First band, first plan: use full placement
+                    bandHeaderRow.add("Age");
+                    bandHeaderRow.add("Rating");
+                    if (columnSpacingWidth > 0) {
+                        for (int s = 0; s < columnSpacingWidth; s++) {
+                            bandHeaderRow.add("");
+                        }
+                    }
+                } else if (planIdx == 0) {
+                    // Subsequent bands, first plan: add age header
+                    bandHeaderRow.add("Age");
+                    bandHeaderRow.add("Rating");
+                    if (columnSpacingWidth > 0) {
+                        for (int s = 0; s < columnSpacingWidth; s++) {
+                            bandHeaderRow.add("");
+                        }
+                    }
+                } else {
+                    // Subsequent plans in same band: duplicate pattern
+                    bandHeaderRow.add("Age");
+                    bandHeaderRow.add("Rating");
+                    if (columnSpacingWidth > 0) {
+                        for (int s = 0; s < columnSpacingWidth; s++) {
+                            bandHeaderRow.add("");
+                        }
+                    }
+                }
+            }
+        }
+        // Adjust header row to actual band structure
+        bandHeaderRow.clear();
+        for (int bandIdx = 0; bandIdx < 3; bandIdx++) {
+            List<Integer> bandAges = (bandIdx == 0) ? band1Ages : (bandIdx == 1) ? band2Ages : band3Ages;
+            for (int planIdx = 0; planIdx < planNames.size(); planIdx++) {
+                bandHeaderRow.add("Age");
+                bandHeaderRow.add("Rating");
+                if (columnSpacingWidth > 0) {
+                    for (int s = 0; s < columnSpacingWidth; s++) {
+                        bandHeaderRow.add("");
+                    }
+                }
+            }
+        }
+        matrix.add(bandHeaderRow);
+
+        // Data rows: one row = one age across all bands for all plans
+        int maxAgeCount = Math.max(band1Ages.size(), Math.max(band2Ages.size(), band3Ages.size()));
+        for (int ageIdx = 0; ageIdx < maxAgeCount; ageIdx++) {
+            List<Object> dataRow = new ArrayList<>();
+
+            // Band 1 (ages 0-30)
+            for (int planIdx = 0; planIdx < planNames.size(); planIdx++) {
+                int age = ageIdx < band1Ages.size() ? band1Ages.get(ageIdx) : -1;
+                String planName = planNames.get(planIdx);
+                Object rating = (age >= 0 && planAgeRatingMap.get(planName) != null) ?
+                        planAgeRatingMap.get(planName).getOrDefault(age, "") : "";
+
+                dataRow.add(age >= 0 ? age : "");
+                dataRow.add(rating);
+                if (columnSpacingWidth > 0) {
+                    for (int s = 0; s < columnSpacingWidth; s++) {
+                        dataRow.add("");
+                    }
+                }
+            }
+
+            // Band 2 (ages 31-47)
+            for (int planIdx = 0; planIdx < planNames.size(); planIdx++) {
+                int age = ageIdx < band2Ages.size() ? band2Ages.get(ageIdx) : -1;
+                String planName = planNames.get(planIdx);
+                Object rating = (age >= 0 && planAgeRatingMap.get(planName) != null) ?
+                        planAgeRatingMap.get(planName).getOrDefault(age, "") : "";
+
+                dataRow.add(age >= 0 ? age : "");
+                dataRow.add(rating);
+                if (columnSpacingWidth > 0) {
+                    for (int s = 0; s < columnSpacingWidth; s++) {
+                        dataRow.add("");
+                    }
+                }
+            }
+
+            // Band 3 (ages 48-64+)
+            for (int planIdx = 0; planIdx < planNames.size(); planIdx++) {
+                int age = ageIdx < band3Ages.size() ? band3Ages.get(ageIdx) : -1;
+                String planName = planNames.get(planIdx);
+                Object rating = (age >= 0 && planAgeRatingMap.get(planName) != null) ?
+                        planAgeRatingMap.get(planName).getOrDefault(age, "") : "";
+
+                dataRow.add(age >= 0 ? age : "");
+                dataRow.add(rating);
+                if (columnSpacingWidth > 0) {
+                    for (int s = 0; s < columnSpacingWidth; s++) {
+                        dataRow.add("");
+                    }
+                }
+            }
+
+            matrix.add(dataRow);
+        }
+
+        return matrix;
+    }
+
+    private static int[] bandStartColumns() {
+        return new int[]{0, 0, 0}; // Placeholder
+    }
+
+    /**
+     * Convenience method with defaults for age rating transformation.
+     */
+    public static List<List<Object>> transformAgeRatingsToMatrix(List<Map<String, Object>> plans) {
+        return transformAgeRatingsToMatrix(plans, "age", "rating", 1);
+    }
+
+    /**
+     * Inject age-rating matrix into data under "comparisonMatrix" key.
+     */
+    public static Map<String, Object> injectAgeRatings(
+            Map<String, Object> data,
+            List<Map<String, Object>> plans,
+            String ageField,
+            String ratingField,
+            int columnSpacingWidth) {
+        Map<String, Object> result = new HashMap<>(data);
+        List<List<Object>> matrix = transformAgeRatingsToMatrix(plans, ageField, ratingField, columnSpacingWidth);
+        result.put("comparisonMatrix", matrix);
+        return result;
+    }
+
+    /**
+     * Convenience variant with defaults.
+     */
+    public static Map<String, Object> injectAgeRatings(
+            Map<String, Object> data,
+            List<Map<String, Object>> plans) {
+        return injectAgeRatings(data, plans, "age", "rating", 1);
+    }
 }
 
