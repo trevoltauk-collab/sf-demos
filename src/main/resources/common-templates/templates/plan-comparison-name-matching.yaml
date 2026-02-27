@@ -14,25 +14,25 @@ description: Plan comparison with name-based benefit matching (Mode 1)
 # Configuration for plan comparison transformation
 config:
   columnSpacing: 1
-  # Enable name-based matching: template has benefit names in first column
-  # When true, DocumentComposer injects comparisonMatrixValues (benefit column excluded)
-  # and the range mapping should start at column B (values only)
-  matchBenefitNamesInTemplate: true
+  # When true, DocumentComposer injects comparisonMatrixValues (used when
+  # the template already contains benefit names in column A). When false,
+  # the full matrix (including the "Benefit" column) will be injected and
+  # written into the worksheet (auto-generating benefit names).
+  matchBenefitNamesInTemplate: false
 
 sections:
   - sectionId: plan_comparison
     type: EXCEL
     templatePath: comparison-template.xlsx
     mappingType: JSONPATH
-    
-    # Enable name-based row matching in the renderer
+
+    # For this template we want auto-generated benefit names (template does
+    # not pre-populate them), therefore name matching is disabled.
     matchBenefitNamesInTemplate: false
-    
+
     fieldMappings:
-      # Map comparison matrix to the VALUE columns ONLY (B1:G6)
-      # The benefit names stay in column A (from the template)
-      # comparisonMatrixValues contains: [header row without "Benefit", then data rows without first column]
-      # So A1 gets the first plan name, A2 gets first plan's first benefit value, etc.
+      # Map comparison matrix including the Benefit column into the full
+      # range so that the first column is populated with benefit names.
       "A1:G6": "$.comparisonMatrix"
-    
+
     overwrite: true
