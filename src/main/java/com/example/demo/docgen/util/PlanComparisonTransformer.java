@@ -350,38 +350,36 @@ public class PlanComparisonTransformer {
         }
 
         // Age bands: [0-30], [31-47], [48-64+]
-        // Find max age to detect band sizes dynamically
-        List<Map<String, Object>> allAges = new ArrayList<>();
+        // Handle both string and numeric ages
+        List<String> band1Ages = new ArrayList<>();  // 0-14, 15, 16, ..., 30
+        List<String> band2Ages = new ArrayList<>();  // 31, 32, ..., 47
+        List<String> band3Ages = new ArrayList<>();  // 48, 49, ..., 64+
+
+        // Collect all age entries and categorize into bands
         for (Map<String, Object> plan : plans) {
             List<Map<String, Object>> ageRatings = (List<Map<String, Object>>) plan.get("ageRatings");
             if (ageRatings != null) {
-                allAges.addAll(ageRatings);
-            }
-        }
-
-        // Group ages into bands
-        List<Integer> band1Ages = new ArrayList<>();
-        List<Integer> band2Ages = new ArrayList<>();
-        List<Integer> band3Ages = new ArrayList<>();
-
-        for (Map<String, Object> item : allAges) {
-            Object ageObj = item.get(ageField);
-            if (ageObj instanceof Number) {
-                int age = ((Number) ageObj).intValue();
-                if (age <= 30) {
-                    band1Ages.add(age);
-                } else if (age <= 47) {
-                    band2Ages.add(age);
-                } else {
-                    band3Ages.add(age);
+                for (Map<String, Object> item : ageRatings) {
+                    Object ageObj = item.get(ageField);
+                    if (ageObj != null) {
+                        String ageStr = ageObj.toString();
+                        int ageBand = getAgeBand(ageStr);
+                        if (ageBand == 1) {
+                            if (!band1Ages.contains(ageStr)) band1Ages.add(ageStr);
+                        } else if (ageBand == 2) {
+                            if (!band2Ages.contains(ageStr)) band2Ages.add(ageStr);
+                        } else if (ageBand == 3) {
+                            if (!band3Ages.contains(ageStr)) band3Ages.add(ageStr);
+                        }
+                    }
                 }
             }
         }
 
-        // Sort and deduplicate
-        band1Ages = new ArrayList<>(new TreeSet<>(band1Ages));
-        band2Ages = new ArrayList<>(new TreeSet<>(band2Ages));
-        band3Ages = new ArrayList<>(new TreeSet<>(band3Ages));
+        // Sort each band's ages in order
+        sortAgeBand(band1Ages);
+        sortAgeBand(band2Ages);
+        sortAgeBand(band3Ages);
 
         // Extract plan names and ageRating maps
         List<String> planNames = plans.stream()
@@ -397,20 +395,20 @@ public class PlanComparisonTransformer {
                 })
                 .collect(Collectors.toList());
 
-        // Build age-to-rating maps for each plan
-        Map<String, Map<Integer, Object>> planAgeRatingMap = new HashMap<>();
+        // Build age-to-rating maps for each plan (keyed by string age)
+        Map<String, Map<String, Object>> planAgeRatingMap = new HashMap<>();
         for (Map<String, Object> plan : plans) {
             String planName = (String) plan.get("planName");
-            Map<Integer, Object> ageRatingMap = new HashMap<>();
+            Map<String, Object> ageRatingMap = new HashMap<>();
 
             List<Map<String, Object>> ageRatings = (List<Map<String, Object>>) plan.get("ageRatings");
             if (ageRatings != null) {
                 for (Map<String, Object> item : ageRatings) {
                     Object ageObj = item.get(ageField);
                     Object ratingObj = item.get(ratingField);
-                    if (ageObj instanceof Number) {
-                        int age = ((Number) ageObj).intValue();
-                        ageRatingMap.put(age, ratingObj);
+                    if (ageObj != null) {
+                        String ageStr = ageObj.toString();
+                        ageRatingMap.put(ageStr, ratingObj);
                     }
                 }
             }
@@ -418,15 +416,38 @@ public class PlanComparisonTransformer {
             planAgeRatingMap.put(planName, ageRatingMap);
         }
 
-        // Build 3-row header structure
+        // Build matrix with structure:
+        // Row 1: Plan names (one per band set, with spacing)
+        // Row 2: Plan codes (one per band set, with spacing)
+        // Row 3: Band headers (Age/Rating labels)
+        // Rows 4+: Data rows with ages and ratings
+        
         List<List<Object>> matrix = new ArrayList<>();
 
-        // Row 0: Plan names (repeated for each band)
+        // Row 0: Plan names - repeated for each band
         List<Object> planNameRow = new ArrayList<>();
         for (String planName : planNames) {
+            // Band 1, 2, 3 - show plan name in first column of each band
             planNameRow.add(planName);
-            for (int b = 0; b < (bandStartColumns().length - 1); b++) {
-                planNameRow.add("");
+            planNameRow.add("");  // Rating column header
+            if (columnSpacingWidth > 0) {
+                for (int s = 0; s < columnSpacingWidth; s++) {
+                    planNameRow.add("");
+                }
+            }
+            planNameRow.add("");   // Band 2 Age
+            planNameRow.add("");   // Band 2 Rating  
+            if (columnSpacingWidth > 0) {
+                for (int s = 0; s < columnSpacingWidth; s++) {
+                    planNameRow.add("");
+                }
+            }
+            planNameRow.add("");   // Band 3 Age
+            planNameRow.add("");   // Band 3 Rating
+            if (columnSpacingWidth > 0) {
+                for (int s = 0; s < columnSpacingWidth; s++) {
+                    planNameRow.add("");
+                }
             }
         }
         matrix.add(planNameRow);
@@ -435,110 +456,98 @@ public class PlanComparisonTransformer {
         List<Object> planCodeRow = new ArrayList<>();
         for (String planCode : planCodes) {
             planCodeRow.add(planCode);
-            for (int b = 0; b < (bandStartColumns().length - 1); b++) {
-                planCodeRow.add("");
+            planCodeRow.add("");
+            if (columnSpacingWidth > 0) {
+                for (int s = 0; s < columnSpacingWidth; s++) {
+                    planCodeRow.add("");
+                }
+            }
+            planCodeRow.add("");
+            planCodeRow.add("");
+            if (columnSpacingWidth > 0) {
+                for (int s = 0; s < columnSpacingWidth; s++) {
+                    planCodeRow.add("");
+                }
+            }
+            planCodeRow.add("");
+            planCodeRow.add("");
+            if (columnSpacingWidth > 0) {
+                for (int s = 0; s < columnSpacingWidth; s++) {
+                    planCodeRow.add("");
+                }
             }
         }
         matrix.add(planCodeRow);
 
-        // Row 2: Band headers (Age/Rating labels)
+        // Row 2: Column headers (Age/Rating pairs for each band)
         List<Object> bandHeaderRow = new ArrayList<>();
-        int[] bandStarts = bandStartColumns();
-        for (int bandIdx = 0; bandIdx < 3; bandIdx++) {
-            List<Integer> bandAges = (bandIdx == 0) ? band1Ages : (bandIdx == 1) ? band2Ages : band3Ages;
-            for (int planIdx = 0; planIdx < planNames.size(); planIdx++) {
-                if (planIdx == 0 && bandIdx == 0) {
-                    // First band, first plan: use full placement
-                    bandHeaderRow.add("Age");
-                    bandHeaderRow.add("Rating");
-                    if (columnSpacingWidth > 0) {
-                        for (int s = 0; s < columnSpacingWidth; s++) {
-                            bandHeaderRow.add("");
-                        }
-                    }
-                } else if (planIdx == 0) {
-                    // Subsequent bands, first plan: add age header
-                    bandHeaderRow.add("Age");
-                    bandHeaderRow.add("Rating");
-                    if (columnSpacingWidth > 0) {
-                        for (int s = 0; s < columnSpacingWidth; s++) {
-                            bandHeaderRow.add("");
-                        }
-                    }
-                } else {
-                    // Subsequent plans in same band: duplicate pattern
-                    bandHeaderRow.add("Age");
-                    bandHeaderRow.add("Rating");
-                    if (columnSpacingWidth > 0) {
-                        for (int s = 0; s < columnSpacingWidth; s++) {
-                            bandHeaderRow.add("");
-                        }
-                    }
+        for (String planName : planNames) {
+            // Band 1 headers
+            bandHeaderRow.add("Age");
+            bandHeaderRow.add("Rating");
+            if (columnSpacingWidth > 0) {
+                for (int s = 0; s < columnSpacingWidth; s++) {
+                    bandHeaderRow.add("");
                 }
             }
-        }
-        // Adjust header row to actual band structure
-        bandHeaderRow.clear();
-        for (int bandIdx = 0; bandIdx < 3; bandIdx++) {
-            List<Integer> bandAges = (bandIdx == 0) ? band1Ages : (bandIdx == 1) ? band2Ages : band3Ages;
-            for (int planIdx = 0; planIdx < planNames.size(); planIdx++) {
-                bandHeaderRow.add("Age");
-                bandHeaderRow.add("Rating");
-                if (columnSpacingWidth > 0) {
-                    for (int s = 0; s < columnSpacingWidth; s++) {
-                        bandHeaderRow.add("");
-                    }
+            // Band 2 headers
+            bandHeaderRow.add("Age");
+            bandHeaderRow.add("Rating");
+            if (columnSpacingWidth > 0) {
+                for (int s = 0; s < columnSpacingWidth; s++) {
+                    bandHeaderRow.add("");
+                }
+            }
+            // Band 3 headers
+            bandHeaderRow.add("Age");
+            bandHeaderRow.add("Rating");
+            if (columnSpacingWidth > 0) {
+                for (int s = 0; s < columnSpacingWidth; s++) {
+                    bandHeaderRow.add("");
                 }
             }
         }
         matrix.add(bandHeaderRow);
 
-        // Data rows: one row = one age across all bands for all plans
+        // Data rows: each row contains age/rating pairs for each band
         int maxAgeCount = Math.max(band1Ages.size(), Math.max(band2Ages.size(), band3Ages.size()));
         for (int ageIdx = 0; ageIdx < maxAgeCount; ageIdx++) {
             List<Object> dataRow = new ArrayList<>();
 
-            // Band 1 (ages 0-30)
             for (int planIdx = 0; planIdx < planNames.size(); planIdx++) {
-                int age = ageIdx < band1Ages.size() ? band1Ages.get(ageIdx) : -1;
                 String planName = planNames.get(planIdx);
-                Object rating = (age >= 0 && planAgeRatingMap.get(planName) != null) ?
-                        planAgeRatingMap.get(planName).getOrDefault(age, "") : "";
+                Map<String, Object> ageRatingMap = planAgeRatingMap.get(planName);
 
-                dataRow.add(age >= 0 ? age : "");
-                dataRow.add(rating);
+                // Band 1 (ages 0-30)
+                String band1Age = ageIdx < band1Ages.size() ? band1Ages.get(ageIdx) : "";
+                Object band1Rating = !band1Age.isEmpty() && ageRatingMap != null ? 
+                        ageRatingMap.getOrDefault(band1Age, "") : "";
+                dataRow.add(band1Age);
+                dataRow.add(band1Rating);
                 if (columnSpacingWidth > 0) {
                     for (int s = 0; s < columnSpacingWidth; s++) {
                         dataRow.add("");
                     }
                 }
-            }
 
-            // Band 2 (ages 31-47)
-            for (int planIdx = 0; planIdx < planNames.size(); planIdx++) {
-                int age = ageIdx < band2Ages.size() ? band2Ages.get(ageIdx) : -1;
-                String planName = planNames.get(planIdx);
-                Object rating = (age >= 0 && planAgeRatingMap.get(planName) != null) ?
-                        planAgeRatingMap.get(planName).getOrDefault(age, "") : "";
-
-                dataRow.add(age >= 0 ? age : "");
-                dataRow.add(rating);
+                // Band 2 (ages 31-47)
+                String band2Age = ageIdx < band2Ages.size() ? band2Ages.get(ageIdx) : "";
+                Object band2Rating = !band2Age.isEmpty() && ageRatingMap != null ? 
+                        ageRatingMap.getOrDefault(band2Age, "") : "";
+                dataRow.add(band2Age);
+                dataRow.add(band2Rating);
                 if (columnSpacingWidth > 0) {
                     for (int s = 0; s < columnSpacingWidth; s++) {
                         dataRow.add("");
                     }
                 }
-            }
 
-            // Band 3 (ages 48-64+)
-            for (int planIdx = 0; planIdx < planNames.size(); planIdx++) {
-                int age = ageIdx < band3Ages.size() ? band3Ages.get(ageIdx) : -1;
-                String planName = planNames.get(planIdx);
-                Object rating = (age >= 0 && planAgeRatingMap.get(planName) != null) ?
-                        planAgeRatingMap.get(planName).getOrDefault(age, "") : "";
-
-                dataRow.add(age >= 0 ? age : "");
-                dataRow.add(rating);
+                // Band 3 (ages 48-64+)
+                String band3Age = ageIdx < band3Ages.size() ? band3Ages.get(ageIdx) : "";
+                Object band3Rating = !band3Age.isEmpty() && ageRatingMap != null ? 
+                        ageRatingMap.getOrDefault(band3Age, "") : "";
+                dataRow.add(band3Age);
+                dataRow.add(band3Rating);
                 if (columnSpacingWidth > 0) {
                     for (int s = 0; s < columnSpacingWidth; s++) {
                         dataRow.add("");
@@ -550,6 +559,50 @@ public class PlanComparisonTransformer {
         }
 
         return matrix;
+    }
+
+    /**
+     * Determine which age band an age value belongs to.
+     * Band 1: 0-30 (includes "0-14", "15", ..., "30")
+     * Band 2: 31-47 (includes "31", "32", ..., "47")
+     * Band 3: 48-64+ (includes "48", "49", ..., "64+")
+     */
+    private static int getAgeBand(String ageStr) {
+        if (ageStr == null || ageStr.isEmpty()) return -1;
+        
+        // Handle special cases
+        if ("0-14".equals(ageStr)) return 1;
+        if ("64+".equals(ageStr)) return 3;
+        
+        try {
+            int age = Integer.parseInt(ageStr);
+            if (age <= 30) return 1;
+            if (age <= 47) return 2;
+            return 3;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    /**
+     * Sort ages within a band, handling both "0-14" string and numeric strings.
+     */
+    private static void sortAgeBand(List<String> ageList) {
+        ageList.sort((a, b) -> {
+            // Handle special "0-14" band marker
+            if ("0-14".equals(a)) return -1;
+            if ("0-14".equals(b)) return 1;
+            if ("64+".equals(a)) return 1;
+            if ("64+".equals(b)) return -1;
+            
+            try {
+                int aNum = Integer.parseInt(a);
+                int bNum = Integer.parseInt(b);
+                return Integer.compare(aNum, bNum);
+            } catch (NumberFormatException e) {
+                return a.compareTo(b);
+            }
+        });
     }
 
     private static int[] bandStartColumns() {
@@ -587,4 +640,3 @@ public class PlanComparisonTransformer {
         return injectAgeRatings(data, plans, "age", "rating", 1);
     }
 }
-

@@ -1,0 +1,12 @@
+templateId: composite-enrollment
+baseTemplateId: base-enrollment=${application.state}
+includedFragments:
+  - medical-fragment
+  - dental-fragment
+  - ca-disclosures
+headerFooterConfig:
+  headers:
+    - renderType: PDFBOX
+      content: "ENROLLMENT PACKAGE - ${application.productType}"
+      alignment: "CENTER"
+      marginTop: 20

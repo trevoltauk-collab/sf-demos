@@ -1,0 +1,17 @@
+{
+  "templateId": "base-enrollment.yaml",
+  "namespace": "common-templates",
+  "data": {
+    "applicant": {
+      "firstName": "John",
+      "lastName": "Doe",
+      "ssn": "123-45-6789",
+      "dateOfBirth": "1980-01-15",
+      "email": "john.doe@example.com",
+      "phone": "(555) 123-4567"
+    },
+    "application": {
+      "state": "CA"
+    }
+  }
+}

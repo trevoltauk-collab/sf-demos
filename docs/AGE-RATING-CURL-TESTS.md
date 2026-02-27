@@ -5,7 +5,11 @@
 - curl installed
 - jq (optional, for JSON formatting)
 
-## Test 1: Basic Request with JSON File
+## Test 1: Basic Request with Raw Plan Data JSON File
+
+This request sends plans with `ageRatings` arrays. The server automatically
+applies the **age-rating transformer** defined in the template, so clients
+no longer need to build the comparison matrix themselves.
 
 ```bash
 curl -X POST http://localhost:8080/api/documents/generate/excel \
@@ -15,7 +19,10 @@ curl -X POST http://localhost:8080/api/documents/generate/excel \
   -v
 ```
 
-## Test 2: Using Inline JSON Data
+## Test 2: Using Inline JSON Data (Raw Plans)
+
+Instead of providing a matrix, include the `plans` array directly. The
+server will build the matrix automatically.
 
 ```bash
 curl -X POST http://localhost:8080/api/documents/generate/excel \
@@ -24,14 +31,29 @@ curl -X POST http://localhost:8080/api/documents/generate/excel \
     "namespace": "common-templates",
     "templateId": "age-rating-comparison",
     "data": {
-      "comparisonMatrix": [
-        ["Silver", "", "", "", "", "", "", "", "Gold", "", "", "", "", "", "", ""],
-        ["Nat / S001", "", "", "", "", "", "", "", "Intl / G002", "", "", "", "", "", "", ""],
-        ["Age", "Rating", "", "Age", "Rating", "", "Age", "Rating", "", "Age", "Rating", "", "Age", "Rating", "", "Age", "Rating", ""],
-        [0, 100, "", 31, 410, "", 48, 600, "", 0, 90, "", 31, 340, "", 48, 500, ""],
-        [1, 110, "", 32, 420, "", 49, 615, "", 1, 98, "", 32, 349, "", 49, 512, ""],
-        [2, 120, "", 33, 430, "", 50, 630, "", 2, 106, "", 33, 358, "", 50, 524, ""],
-        [3, 130, "", 34, 440, "", 51, 645, "", 3, 114, "", 34, 367, "", 51, 536, ""]
+      "plans": [
+        {
+          "planName": "Silver",
+          "network": "Nat",
+          "contractCode": "S001",
+          "ageRatings": [
+            { "age": 0, "rating": 100 },
+            { "age": 30, "rating": 400 },
+            { "age": 31, "rating": 410 },
+            { "age": 48, "rating": 600 }
+          ]
+        },
+        {
+          "planName": "Gold",
+          "network": "Intl",
+          "contractCode": "G002",
+          "ageRatings": [
+            { "age": 0, "rating": 90 },
+            { "age": 30, "rating": 330 },
+            { "age": 31, "rating": 340 },
+            { "age": 48, "rating": 500 }
+          ]
+        }
       ]
     }
   }' \
@@ -39,6 +61,10 @@ curl -X POST http://localhost:8080/api/documents/generate/excel \
 ```
 
 ## Test 3: Test with Different Template (if you have one)
+
+You can still send precomputed matrices if you prefer; the transformer will
+skip transformation when a `comparisonMatrix` is already present. This is
+useful for testing minimal templates.
 
 ```bash
 curl -X POST http://localhost:8080/api/documents/generate/excel \

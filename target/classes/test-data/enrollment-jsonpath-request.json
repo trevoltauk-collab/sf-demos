@@ -1,0 +1,86 @@
+{
+  "templateId": "templates/enrollment-jsonpath-optimized.yaml",
+  "data": {
+    "applicationId": "APP-2024-67890",
+    "applicationDate": "2024-01-20",
+    "status": "APPROVED",
+    "applicants": [
+      {
+        "type": "PRIMARY",
+        "demographic": {
+          "firstName": "Sarah",
+          "middleName": "Anne",
+          "lastName": "Johnson",
+          "dateOfBirth": "1990-04-12",
+          "gender": "Female",
+          "ssn": "555-66-7777",
+          "email": "sarah.j@email.com",
+          "phone": "(555) 987-6543",
+          "addresses": [
+            {
+              "type": "HOME",
+              "street": "789 Elm Drive",
+              "city": "Austin",
+              "state": "TX",
+              "zipCode": "73301"
+            },
+            {
+              "type": "BILLING",
+              "street": "321 Pine Road",
+              "city": "Dallas",
+              "state": "TX",
+              "zipCode": "75201"
+            }
+          ]
+        }
+      },
+      {
+        "type": "SPOUSE",
+        "demographic": {
+          "firstName": "Michael",
+          "middleName": "Robert",
+          "lastName": "Johnson",
+          "dateOfBirth": "1988-09-05",
+          "gender": "Male",
+          "ssn": "444-55-6666",
+          "addresses": [
+            {
+              "type": "HOME",
+              "street": "789 Elm Drive",
+              "city": "Austin",
+              "state": "TX",
+              "zipCode": "73301"
+            }
+          ]
+        }
+      },
+      {
+        "type": "CHILD",
+        "demographic": {
+          "firstName": "Sophia",
+          "lastName": "Johnson",
+          "dateOfBirth": "2016-12-03",
+          "gender": "Female"
+        }
+      },
+      {
+        "type": "CHILD",
+        "demographic": {
+          "firstName": "Liam",
+          "lastName": "Johnson",
+          "dateOfBirth": "2019-07-18",
+          "gender": "Male"
+        }
+      },
+      {
+        "type": "CHILD",
+        "demographic": {
+          "firstName": "Ava",
+          "lastName": "Johnson",
+          "dateOfBirth": "2021-02-28",
+          "gender": "Female"
+        }
+      }
+    ]
+  }
+}

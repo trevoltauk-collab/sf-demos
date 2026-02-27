@@ -1,0 +1,6 @@
+templateId: test-inheritance-grandchild
+baseTemplateId: test-inheritance-child
+sections:
+  - sectionId: grandchild-section
+    type: ACROFORM
+    templatePath: grandchild-form.pdf

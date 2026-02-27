@@ -1,0 +1,6 @@
+templateId: shared-footer
+sections:
+  - sectionId: footer
+    type: FREEMARKER
+    templatePath: freemarker/shared-footer.ftl
+    order: 100

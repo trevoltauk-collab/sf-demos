@@ -1,0 +1,20 @@
+templateId: employee-roster
+description: Employee roster with table population
+sections:
+  - sectionId: employee_table
+    type: EXCEL
+    templatePath: employee-roster.xlsx
+    fieldMappingGroups:
+      - mappingType: JSONPATH
+        basePath: "$.employees"
+        repeatingGroup:
+          startCell: "A2"
+          insertRows: false
+          overwrite: true
+          maxItems: 50
+          fields:
+            A: "employeeId"
+            B: "firstName"
+            C: "lastName"
+            D: "email"
+            E: "department"

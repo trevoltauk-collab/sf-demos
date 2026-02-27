@@ -1,0 +1,28 @@
+{
+  "templateId": "invoice-with-viewmodel",
+  "data": {
+    "invoiceNumber": "INV-2026-001",
+    "date": "2026-01-15",
+    "customer": {
+      "companyName": "ACME Corp",
+      "address": {
+        "street": "123 Main St",
+        "city": "Boston",
+        "state": "MA",
+        "zipCode": "02101"
+      }
+    },
+    "items": [
+      {
+        "description": "Consulting Services",
+        "quantity": 10,
+        "unitPrice": 150.00
+      },
+      {
+        "description": "Software License",
+        "quantity": 1,
+        "unitPrice": 500.00
+      }
+    ]
+  }
+}

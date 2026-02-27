@@ -1,0 +1,19 @@
+templateId: employee-table
+description: Simple employee table for basic table population
+sections:
+  - sectionId: employees
+    type: EXCEL
+    templatePath: employee-table.xlsx
+    fieldMappingGroups:
+      - mappingType: JSONPATH
+        basePath: "$.employees"
+        repeatingGroup:
+          startCell: "A3"
+          insertRows: false
+          overwrite: true
+          maxItems: 25
+          fields:
+            A: "employeeId"
+            B: "name"
+            C: "department"
+            D: "salary"

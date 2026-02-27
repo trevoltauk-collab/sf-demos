@@ -256,6 +256,13 @@ public class DocumentComposer {
             if (workbook == null) {
                 throw new RuntimeException("No Excel workbook produced by renderers");
             }
+            
+            // Apply header formatting for age-rating transformers
+            String transformer = template.getConfig() != null ? (String) template.getConfig().get("transformer") : null;
+            if ("age-rating".equals(transformer)) {
+                applyAgeRatingHeaderFormatting(workbook, originalData);
+            }
+            
             return excelOutputService.toBytes(workbook);
 
         } catch (TemplateLoadingException | ResourceLoadingException e) {
@@ -482,13 +489,28 @@ public class DocumentComposer {
         if (template.getConfig() != null) combined.putAll(template.getConfig());
         if (section != null && section.getConfig() != null) combined.putAll(section.getConfig());
 
+        // determine which transformer (if any) is requested.  we support
+        // both the original "plan-comparison" and the new "age-rating" names
+        String transformerName = null;
+        if (combined.containsKey("transformer") && combined.get("transformer") instanceof String) {
+            transformerName = (String) combined.get("transformer");
+        }
         boolean wantsTransform = false;
-        if (combined.containsKey("transformer") && "plan-comparison".equals(combined.get("transformer"))) {
+        if ("plan-comparison".equals(transformerName) || "age-rating".equals(transformerName)) {
             wantsTransform = true;
         }
         // legacy: if no explicit transformer, fall back to templateId prefix
-        if (!wantsTransform && template.getTemplateId() != null && template.getTemplateId().startsWith("plan-comparison")) {
-            wantsTransform = true;
+        if (!wantsTransform && template.getTemplateId() != null) {
+            if (template.getTemplateId().startsWith("plan-comparison") ||
+                    template.getTemplateId().startsWith("age-rating")) {
+                wantsTransform = true;
+                // implicitly treat legacy prefix as plan-comparison so we don't
+                // accidentally switch behaviour; we only check templateId for
+                // triggering, not for determining which transformer to run.
+                if (transformerName == null) {
+                    transformerName = "plan-comparison";
+                }
+            }
         }
         if (!wantsTransform) {
             return data;
@@ -548,13 +570,115 @@ public class DocumentComposer {
             return data;
         }
 
-        log.info("Auto-transforming plan data into comparison matrix for section {} (template {}), spacing={}, valuesOnly={}, matchNames={}",
-                section == null ? "<none>" : section.getSectionId(), template.getTemplateId(), columnSpacing, valuesOnly, matchNames);
+        log.info("Auto-transforming plan data for section {} (template {}); transformer={}, spacing={}, valuesOnly={}, matchNames={}",
+                section == null ? "<none>" : section.getSectionId(), template.getTemplateId(), transformerName,
+                columnSpacing, valuesOnly, matchNames);
 
-        if (useValues) {
-            return PlanComparisonTransformer.injectComparisonMatrixValuesOnly(data, plans, "name", "value", columnSpacing);
+        if ("age-rating".equals(transformerName)) {
+            // read any custom field names
+            String ageField = "age";
+            String ratingField = "rating";
+            if (combined.containsKey("ageField") && combined.get("ageField") instanceof String) {
+                ageField = (String) combined.get("ageField");
+            }
+            if (combined.containsKey("ratingField") && combined.get("ratingField") instanceof String) {
+                ratingField = (String) combined.get("ratingField");
+            }
+            return PlanComparisonTransformer.injectAgeRatings(data, plans, ageField, ratingField, columnSpacing);
         } else {
-            return PlanComparisonTransformer.injectComparisonMatrix(data, plans, "name", "value", columnSpacing);
+            if (useValues) {
+                return PlanComparisonTransformer.injectComparisonMatrixValuesOnly(data, plans, "name", "value", columnSpacing);
+            } else {
+                return PlanComparisonTransformer.injectComparisonMatrix(data, plans, "name", "value", columnSpacing);
+            }
+        }
+    }
+    
+    /**
+     * Apply header formatting (merge and center) for age-rating comparison matrices
+     * Merges and centers the plan name and code rows across each plan's columns
+     */
+    private void applyAgeRatingHeaderFormatting(org.apache.poi.ss.usermodel.Workbook workbook, Map<String, Object> data) {
+        try {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+            if (sheet == null) return;
+            
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> plans = (List<Map<String, Object>>) data.get("plans");
+            if (plans == null || plans.isEmpty()) return;
+            
+            // Each plan occupies: 2 cols (Band1: Age/Rating) + 1 spacing + 2 cols (Band2) + 1 spacing + 2 cols (Band3) + 1 spacing = 9 cols
+            int columnsPerPlan = 9;
+            
+            for (int planIdx = 0; planIdx < plans.size(); planIdx++) {
+                int startCol = planIdx * columnsPerPlan;
+                int endCol = startCol + 5; // Merge across Age/Rating columns of all 3 bands (6 cols: 0-1, 3-4, 6-7 relative = cols 0-5 within plan span)
+                
+                // Merge and center plan name (row 0)
+                org.apache.poi.ss.usermodel.Row row1 = sheet.getRow(0);
+                if (row1 != null) {
+                    mergeAndCenterCells(workbook, sheet, 0, startCol, endCol);
+                }
+                
+                // Merge and center network/code (row 1)
+                org.apache.poi.ss.usermodel.Row row2 = sheet.getRow(1);
+                if (row2 != null) {
+                    mergeAndCenterCells(workbook, sheet, 1, startCol, endCol);
+                }
+            }
+            
+            // Center align all header cells in row 2 (Age/Rating labels)
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.getRow(2);
+            if (headerRow != null) {
+                for (int col = 0; col < headerRow.getLastCellNum(); col++) {
+                    org.apache.poi.ss.usermodel.Cell cell = headerRow.getCell(col);
+                    if (cell != null) {
+                        org.apache.poi.ss.usermodel.CellStyle style = workbook.createCellStyle();
+                        if (cell.getCellStyle() != null) {
+                            style.cloneStyleFrom(cell.getCellStyle());
+                        }
+                        style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+                        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+                        cell.setCellStyle(style);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error applying age-rating header formatting", e);
+        }
+    }
+    
+    /**
+     * Merge cells in a range and apply center alignment
+     */
+    private void mergeAndCenterCells(org.apache.poi.ss.usermodel.Workbook workbook, 
+                                     org.apache.poi.ss.usermodel.Sheet sheet,
+                                     int rowIndex,
+                                     int startCol,
+                                     int endCol) {
+        try {
+            // Merge the cells
+            org.apache.poi.ss.util.CellRangeAddress mergeRange = new org.apache.poi.ss.util.CellRangeAddress(
+                rowIndex, rowIndex, startCol, endCol
+            );
+            sheet.addMergedRegion(mergeRange);
+            
+            // Apply center alignment to the merged cell
+            org.apache.poi.ss.usermodel.Row row = sheet.getRow(rowIndex);
+            if (row != null) {
+                org.apache.poi.ss.usermodel.Cell cell = row.getCell(startCol);
+                if (cell != null) {
+                    org.apache.poi.ss.usermodel.CellStyle style = workbook.createCellStyle();
+                    if (cell.getCellStyle() != null) {
+                        style.cloneStyleFrom(cell.getCellStyle());
+                    }
+                    style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+                    style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+                    cell.setCellStyle(style);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error merging cells at row {}, cols {}-{}", rowIndex, startCol, endCol, e);
         }
     }
 }

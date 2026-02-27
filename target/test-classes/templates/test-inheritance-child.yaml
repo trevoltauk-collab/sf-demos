@@ -1,0 +1,13 @@
+templateId: test-inheritance-child
+baseTemplateId: test-inheritance-base
+sections:
+  - sectionId: section1
+    fieldMappings:
+      field1: "$.child.field1"
+      field2: "$.child.field2"
+  - sectionId: section3
+    type: FREEMARKER
+    templatePath: child-path.ftl
+    order: 30
+excludedSections:
+  - section2

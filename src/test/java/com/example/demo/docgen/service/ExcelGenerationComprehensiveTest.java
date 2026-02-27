@@ -417,6 +417,43 @@ class ExcelGenerationComprehensiveTest {
         }
 
         /**
+         * Test 8: Auto-transform raw age-rating plans using new transformer
+         */
+        @Test
+        @DisplayName("Should auto-transform raw age-rating data into matrix")
+        void testAutoTransformationAgeRating() throws Exception {
+            Map<String, Object> requestData = new HashMap<>();
+            List<Map<String, Object>> plans = Arrays.asList(
+                    createAgeRatingPlan("Silver", "Nat", "S001", Arrays.asList(
+                            createAgeRating(0, 100), createAgeRating(30, 400), createAgeRating(31, 410), createAgeRating(48, 600)
+                    )),
+                    createAgeRatingPlan("Gold", "Intl", "G002", Arrays.asList(
+                            createAgeRating(0, 90), createAgeRating(30, 330), createAgeRating(31, 340), createAgeRating(48, 500)
+                    ))
+            );
+            requestData.put("plans", plans);
+
+            byte[] excelBytes = performExcelGeneration(
+                    "common-templates",
+                    "age-rating-comparison",
+                    requestData
+            );
+            Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(excelBytes));
+            Sheet sheet = workbook.getSheetAt(0);
+
+            // compute expected matrix using transformer helper and compare
+            List<List<Object>> expected = PlanComparisonTransformer.transformAgeRatingsToMatrix(plans);
+            for (int r = 0; r < expected.size(); r++) {
+                for (int c = 0; c < expected.get(r).size(); c++) {
+                    String exp = expected.get(r).get(c) == null ? null : expected.get(r).get(c).toString();
+                    assertEquals(exp, getCellValue(sheet, r, c),
+                            "Mismatch at row " + r + " col " + c);
+                }
+            }
+            workbook.close();
+        }
+
+        /**
          * Test 7: Auto-transformation should respect provided comparisonMatrixValues when config valuesOnly=true
          */
         @Test
@@ -775,6 +812,26 @@ class ExcelGenerationComprehensiveTest {
         benefit.put("name", name);
         benefit.put("value", value);
         return benefit;
+    }
+
+    // helpers for age-rating scenarios
+    private Map<String, Object> createAgeRatingPlan(String planName,
+                                                     String network,
+                                                     String contractCode,
+                                                     List<Map<String, Object>> ageRatings) {
+        Map<String, Object> plan = new HashMap<>();
+        plan.put("planName", planName);
+        plan.put("network", network);
+        plan.put("contractCode", contractCode);
+        plan.put("ageRatings", ageRatings);
+        return plan;
+    }
+
+    private Map<String, Object> createAgeRating(int age, Object rating) {
+        Map<String, Object> ar = new HashMap<>();
+        ar.put("age", age);
+        ar.put("rating", rating);
+        return ar;
     }
 
     private String rowToString(Sheet sheet, int rowIndex, int startCol, int endCol) {

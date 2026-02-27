@@ -1,0 +1,10 @@
+{
+  "templateId": "templates/header-footer-example.yaml",
+  "data": {
+    "application": {
+      "applicationId": "HF-TEST-001",
+      "primaryFirstName": "HeaderFooter",
+      "campaignId": "CAMP-2026-XYZ"
+    }
+  }
+}

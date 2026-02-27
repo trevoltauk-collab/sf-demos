@@ -1,0 +1,6 @@
+templateId: child-with-path
+baseTemplateId: base-no-path
+sections:
+  - sectionId: sec1
+    templatePath: forms/child-form.pdf
+    order: 10

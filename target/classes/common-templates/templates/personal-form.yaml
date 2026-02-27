@@ -1,0 +1,23 @@
+templateId: personal-form
+description: Simple personal information form
+sections:
+  - sectionId: personal_info
+    type: EXCEL
+    templatePath: personal-form.xlsx
+    mappingType: JSONPATH
+    fieldMappings:
+      A1: "$.firstName"
+      B1: "$.lastName"
+      C1: "$.email"
+templateId: personal-form
+
+sections:
+  - sectionId: personal_info
+    type: EXCEL
+    templatePath: template.xlsx
+    mappingType: JSONPATH
+    fieldMappings:
+      A1: "$.firstName"
+      B1: "$.lastName"
+      "Sheet2!C5": "$.email"
+    

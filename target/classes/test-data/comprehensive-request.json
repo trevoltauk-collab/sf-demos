@@ -1,0 +1,28 @@
+{
+  "templateId": "composite-enrollment",
+  "data": {
+    "application": {
+      "applicationId": "APP-COMPREHENSIVE-001",
+      "primaryFirstName": "John",
+      "primaryLastName": "Doe",
+      "primaryDob": "1980-01-01",
+      "spouseFirstName": "Jane",
+      "spouseLastName": "Doe",
+      "spouseDob": "1982-05-15",
+      "productType": "MEDICAL",
+      "state": "CA",
+      "children": [
+        {
+          "firstName": "Bobby",
+          "lastName": "Doe",
+          "dob": "2010-03-12"
+        },
+        {
+          "firstName": "Alice",
+          "lastName": "Doe",
+          "dob": "2012-07-22"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "templateId": "templates/invoice-optimized.yaml",
+  "data": {
+    "customer": {
+      "name": "Acme Corporation",
+      "email": "contact@acme.com",
+      "address": "123 Business St, Tech City, TC 12345"
+    },
+    "invoiceNumber": "INV-2024-001",
+    "invoiceDate": "2024-01-15",
+    "items": [
+      {
+        "name": "Software License",
+        "price": 1000
+      },
+      {
+        "name": "Support Package",
+        "price": 500
+      },
+      {
+        "name": "Training Session",
+        "price": 750
+      }
+    ]
+  }
+}

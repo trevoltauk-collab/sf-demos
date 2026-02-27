@@ -1,0 +1,38 @@
+templateId: child-addendum
+description: Addendum page for overflow children (4-6)
+pages:
+  - id: addendum
+    template: templates/acroform-enrollment.pdf
+    sections:
+      - type: acroform
+        mappingGroups:
+          # Header
+          - mappingType: DIRECT
+            mappings:
+              PolicyNumber: "policyNumber"
+              PrimaryFirstName: "primaryApplicant.firstName"
+              PrimaryLastName: "primaryApplicant.lastName"
+          
+          # Children 4-6 (indexes [3], [4], [5])
+          - mappingType: CUSTOM
+            functionName: identity
+            mappings:
+              Child1FirstName: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][3].firstName"
+              Child1LastName: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][3].lastName"
+              Child1DOB: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][3].dateOfBirth"
+              Child1Gender: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][3].gender"
+              Child1SSN: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][3].ssn"
+              
+              Child2FirstName: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][4].firstName"
+              Child2LastName: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][4].lastName"
+              Child2DOB: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][4].dateOfBirth"
+              Child2Gender: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][4].gender"
+              Child2SSN: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][4].ssn"
+              
+              Child3FirstName: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][5].firstName"
+              Child3LastName: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][5].lastName"
+              Child3DOB: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][5].dateOfBirth"
+              Child3Gender: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][5].gender"
+              Child3SSN: "jsonpath:$..applicants[?(@.applicantType=='CHILD')][5].ssn"
+              
+              AdditionalChildrenNote: "direct:Addendum - Additional Dependents (Page 2)"

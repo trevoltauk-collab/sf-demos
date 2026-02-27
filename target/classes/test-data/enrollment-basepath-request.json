@@ -1,0 +1,88 @@
+{
+  "templateId": "templates/enrollment-basepath-optimized.yaml",
+  "data": {
+    "application": {
+    "applicationId": "APP-2024-OPTIMIZED",
+    "applicationDate": "2024-01-25",
+    "status": "PROCESSING",
+
+    "applicants": [
+      {
+        "type": "PRIMARY",
+        "demographic": {
+          "firstName": "David",
+          "middleName": "Lee",
+          "lastName": "Martinez",
+          "dateOfBirth": "1982-11-30",
+          "gender": "Male",
+          "ssn": "111-22-3333",
+          "email": "david.martinez@email.com",
+          "phone": "(555) 111-2222",
+          "addresses": [
+            {
+              "type": "HOME",
+              "street": "456 Oak Lane",
+              "city": "Portland",
+              "state": "OR",
+              "zipCode": "97201"
+            },
+            {
+              "type": "BILLING",
+              "street": "789 Billing Blvd",
+              "city": "Portland",
+              "state": "OR",
+              "zipCode": "97202"
+            }
+          ]
+        }
+      },
+      {
+        "type": "SPOUSE",
+        "demographic": {
+          "firstName": "Emily",
+          "middleName": "Grace",
+          "lastName": "Martinez",
+          "dateOfBirth": "1984-02-14",
+          "gender": "Female",
+          "ssn": "222-33-4444",
+          "addresses": [
+            {
+              "type": "HOME",
+              "street": "456 Oak Lane",
+              "city": "Portland",
+              "state": "OR",
+              "zipCode": "97201"
+            }
+          ]
+        }
+      },
+      {
+        "type": "CHILD",
+        "demographic": {
+          "firstName": "Lucas",
+          "lastName": "Martinez",
+          "dateOfBirth": "2017-05-12",
+          "gender": "Male"
+        }
+      },
+      {
+        "type": "CHILD",
+        "demographic": {
+          "firstName": "Isabella",
+          "lastName": "Martinez",
+          "dateOfBirth": "2019-09-20",
+          "gender": "Female"
+        }
+      },{
+        "type": "CHILD",
+        "demographic": {
+          "firstName": "Sophia",
+          "lastName": "Martinez",
+          "dateOfBirth": "2019-09-20",
+          "gender": "Female"
+        }
+      }
+    ]
+  }
+}
+}

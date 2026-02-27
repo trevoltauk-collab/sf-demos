@@ -1,0 +1,23 @@
+templateId: plan-comparison-values-only
+description: Plan comparison table (values-only) where benefit names are pre-populated in the template
+
+# Configuration for plan comparison transformation
+config:
+  # Number of columns between plan columns (spacing)
+  columnSpacing: 0
+  # When true the server will generate a matrix that excludes the benefit
+  # column.  The result is injected under `comparisonMatrixValues` instead of
+  # `comparisonMatrix` so the worksheet mapping can target a range that starts
+  # immediately to the right of the manually‑populated benefit column.
+  valuesOnly: true
+
+sections:
+  - sectionId: plan_comparison
+    type: EXCEL
+    templatePath: comparison-template-prefilled.xlsx   # reuse same blank workbook
+    mappingType: JSONPATH
+    fieldMappings:
+      # Because the first column is expected to already contain the benefit
+      # names we slide the mapping one column to the right and use the new
+      # key produced by the transformer.
+      "B1:F6": "$.comparisonMatrixValues"

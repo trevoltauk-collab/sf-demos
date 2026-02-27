@@ -1,0 +1,118 @@
+templateId: excel-comprehensive
+description: Comprehensive Excel template example showcasing single cells, ranges, and table population
+pages:
+  - id: data_page
+    sections:
+      # ========================================================================
+      # SECTION 1: Single Cell Mappings (Basic)
+      # ========================================================================
+      - sectionId: header_section
+        type: excel
+        templatePath: forms/comprehensive-template.xlsx
+        mappingType: JSONPATH
+        fieldMappings:
+          # Simple cell references
+          A1: "$.title"
+          B1: "$.createdDate"
+          "Sheet1!C1": "$.version"  # Sheet-qualified reference
+
+      # ========================================================================
+      # SECTION 2: Range Population (Column, Row, or 2D)
+      # ========================================================================
+      - sectionId: data_columns
+        type: excel
+        templatePath: forms/comprehensive-template.xlsx
+        mappingType: JSONPATH
+        fieldMappings:
+          # Fill a column with array values: A2:A6 <- $.items[*].id
+          "Sheet1!A2:A6": "$.items[*].id"
+          
+          # Fill a row with array values: B2:E2 <- $.headers
+          "Sheet1!B2:E2": "$.headers"
+
+      # ========================================================================
+      # SECTION 3: Table Population (Repeating Group with startCell)
+      # Preferred approach for populating multi-column, multi-row tables
+      # ========================================================================
+      - sectionId: employees_table
+        type: excel
+        templatePath: forms/comprehensive-template.xlsx
+        fieldMappingGroups:
+          - mappingType: JSONPATH
+            basePath: "$.employees"  # Array of employee objects
+            repeatingGroup:
+              startCell: "Sheet1!A10"  # Start row at row 10, column A
+              insertRows: false        # Don't shift existing rows
+              overwrite: true          # Overwrite any existing cell values
+              maxRows: 100             # Populate max 100 rows (or fewer if array is shorter)
+              # Map each column to a field in the employee object
+              # Column letter / position -> JSONPath to extract from each employee
+              columns:
+                A: "employeeId"        # Column A <- $.employees[i].employeeId
+                B: "firstName"         # Column B <- $.employees[i].firstName
+                C: "lastName"          # Column C <- $.employees[i].lastName
+                D: "email"             # Column D <- $.employees[i].email
+                E: "salary"            # Column E <- $.employees[i].salary
+
+      # ========================================================================
+      # SECTION 4: Multiple Tables on Same Sheet
+      # ========================================================================
+      - sectionId: projects_table
+        type: excel
+        templatePath: forms/comprehensive-template.xlsx
+        fieldMappingGroups:
+          - mappingType: JSONPATH
+            basePath: "$.projects"
+            repeatingGroup:
+              startCell: "Sheet2!A5"  # Different sheet, different starting row
+              insertRows: true        # Insert rows, shifting existing data down
+              overwrite: false        # Preserve existing values if cell not blank
+              columns:
+                A: "projectName"
+                B: "status"
+                C: "startDate"
+                D: "deadline"
+
+      # ========================================================================
+      # SECTION 5: Nested Data with Multiple Groups
+      # ========================================================================
+      - sectionId: mixed_section
+        type: excel
+        templatePath: forms/comprehensive-template.xlsx
+        fieldMappingGroups:
+          # Group 1: Personal info (single cells)
+          - mappingType: JSONPATH
+            basePath: "$.person"
+            fields:
+              F1: "firstName"
+              G1: "lastName"
+              H1: "birthDate"
+
+          # Group 2: Addresses (multiple rows)
+          - mappingType: JSONPATH
+            basePath: "$.addresses"
+            repeatingGroup:
+              startCell: "Sheet1!F15"
+              columns:
+                F: "street"
+                G: "city"
+                H: "zipCode"
+
+      # ========================================================================
+      # SECTION 6: Different Mapping Strategies in Same Section
+      # ========================================================================
+      - sectionId: mixed_strategies
+        type: excel
+        templatePath: forms/comprehensive-template.xlsx
+        fieldMappingGroups:
+          # Using JSONPATH strategy
+          - mappingType: JSONPATH
+            fields:
+              I1: "$.jsonData.field1"
+              I2: "$.jsonData.field2"
+
+          # Using DIRECT strategy for simple dot notation
+          - mappingType: DIRECT
+            fields:
+              J1: "simpleField"
+              J2: "anotherField"

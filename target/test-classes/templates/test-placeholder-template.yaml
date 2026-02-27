@@ -1,0 +1,19 @@
+templateId: test-placeholder-template
+description: Child template with multiple placeholder scenarios (for testing prewarming with variables)
+baseTemplateId: test-placeholder-base
+sections:
+  - sectionId: form-section
+    type: ACROFORM
+    templatePath: forms/${formType}-${version}-${region}.pdf
+    condition: "$.isFormRequired == true"
+    order: 30
+    fieldMappings:
+      applicantName: "$.applicant.name"
+      applicantEmail: "$.applicant.email"
+  - sectionId: footer-section
+    type: ACROFORM
+    templatePath: forms/footer-${environment}.pdf
+    order: 40
+    fieldMappings:
+      footerCompany: "$.footer.company"
+      footerVersion: "$.footer.version"

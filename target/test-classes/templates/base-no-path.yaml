@@ -1,0 +1,5 @@
+templateId: base-no-path
+sections:
+  - sectionId: sec1
+    type: ACROFORM
+    order: 10

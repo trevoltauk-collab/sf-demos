@@ -1,0 +1,15 @@
+{
+  "templateId": "templates/direct-mapping-example.yaml",
+  "data": {
+    "applicant": {
+      "firstName": "John",
+      "lastName": "Doe",
+      "ssn": "123-45-6789",
+      "dateOfBirth": "01/15/1985",
+      "contact": {
+        "email": "john.doe@example.com",
+        "phone": "(555) 123-4567"
+      }
+    }
+  }
+}

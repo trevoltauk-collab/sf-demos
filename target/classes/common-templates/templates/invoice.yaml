@@ -1,0 +1,39 @@
+templateId: invoice
+description: Excel invoice with header, line items, and summary
+sections:
+  # Header section
+  - sectionId: header
+    type: EXCEL
+    templatePath: invoice-template.xlsx
+    fieldMappings:
+      A3: "$.invoiceNumber"
+      B3: "$.invoiceDate"
+      C3: "$.dueDate"
+      D3: "$.customerName"
+
+  # Line items table
+  - sectionId: line_items
+    type: EXCEL
+    templatePath: invoice-template.xlsx
+    fieldMappingGroups:
+      - mappingType: JSONPATH
+        basePath: "$.lineItems"
+        repeatingGroup:
+          startCell: "A7"
+          insertRows: false
+          overwrite: true
+          maxItems: 20
+          fields:
+            A: "description"
+            B: "quantity"
+            C: "unitPrice"
+            D: "total"
+
+  # Summary section
+  - sectionId: summary
+    type: EXCEL
+    templatePath: invoice-template.xlsx
+    fieldMappings:
+      B28: "$.subtotal"
+      B29: "$.tax"
+      B30: "$.total"

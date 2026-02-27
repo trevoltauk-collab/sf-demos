@@ -1,0 +1,82 @@
+{
+  "templateId": "templates/enrollment-application.yaml",
+  "data": {
+    "application": {
+      "applicationId": "APP-2024-12345",
+      "applicationDate": "2024-01-15",
+      "status": "PENDING",
+      "state":"CA"
+    },
+    "applicants": [
+      {
+        "type": "PRIMARY",
+        "demographic": {
+          "firstName": "John",
+          "middleName": "Michael",
+          "lastName": "Smith",
+          "dateOfBirth": "1985-06-15",
+          "gender": "Male",
+          "ssn": "123-45-6789",
+          "email": "john.smith@email.com",
+          "phone": "(555) 123-4567",
+          "addresses": [
+            {
+              "type": "HOME",
+              "street": "123 Main Street",
+              "city": "Springfield",
+              "state": "IL",
+              "zipCode": "62701"
+            },
+            {
+              "type": "BILLING",
+              "street": "456 Oak Avenue",
+              "city": "Chicago",
+              "state": "IL",
+              "zipCode": "60601"
+            }
+          ]
+        }
+      },
+      {
+        "type": "SPOUSE",
+        "demographic": {
+          "firstName": "Jane",
+          "middleName": "Elizabeth",
+          "lastName": "Smith",
+          "dateOfBirth": "1987-03-22",
+          "gender": "Female",
+          "ssn": "987-65-4321",
+          "email": "jane.smith@email.com",
+          "phone": "(555) 123-4568",
+          "addresses": [
+            {
+              "type": "HOME",
+              "street": "123 Main Street",
+              "city": "Springfield",
+              "state": "IL",
+              "zipCode": "62701"
+            }
+          ]
+        }
+      },
+      {
+        "type": "CHILD",
+        "demographic": {
+          "firstName": "Emily",
+          "lastName": "Smith",
+          "dateOfBirth": "2015-08-10",
+          "gender": "Female"
+        }
+      },
+      {
+        "type": "CHILD",
+        "demographic": {
+          "firstName": "Oliver",
+          "lastName": "Smith",
+          "dateOfBirth": "2018-11-25",
+          "gender": "Male"
+        }
+      }
+    ]
+  }
+}

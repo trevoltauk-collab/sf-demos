@@ -1,0 +1,44 @@
+templateId: plan-comparison
+description: Plan comparison table showing benefits across multiple plans
+
+# Configuration for plan comparison transformation
+# (can also be specified on individual sections instead of globally)
+config:
+  # Logical transformer invoked to prepare data for this template.
+  # Adding this property allows a template to opt in without using a
+  # "plan-comparison"‑prefixed ID.  The only supported value today is
+  # "plan-comparison"; legacy behaviour continues to work by checking the
+  # templateId prefix when this property is absent.
+  transformer: plan-comparison
+
+  # Number of columns between plan columns (spacing)
+  # Default: 1 (creates [benefit, space, plan1, space, plan2, space, plan3])
+  # Can be 0 (no spacing), 2 (wider spacing), etc.
+  # Increased to 2 to provide an extra empty column between benefit and plan values
+  columnSpacing: 0
+
+sections:
+  - sectionId: plan_comparison
+    type: EXCEL
+    templatePath: comparison-template.xlsx
+    mappingType: JSONPATH
+    fieldMappings:
+      # Fill the entire comparison grid with 2D matrix
+      # Structure: [
+      #   ["Benefit",     "",  "Plan A",   "",   "Plan B",   "",  "Plan C"],
+      #   ["Doctor Visits", "", "$20",    "",   "$10",      "",  "Free"],
+      #   ...
+      # ]
+      "A1:K6": "$.comparisonMatrix"
+
+  - sectionId: plan_comparison_examples
+    type: EXCEL
+    templatePath: comparison-template.xlsx
+    mappingType: JSONPATH
+    fieldMappings:
+      # Single-cell example: place document title on the 'Examples' sheet at B1
+      "Examples!B1": "$.comparisonTitle"
+      # Column mapping example: write plan names vertically starting at C2
+      "Examples!C2:C6": "$.plans[*].planName"
+      # Matrix example: place the full comparison matrix on the Examples sheet further down
+      "Examples!A10:K16": "$.comparisonMatrix"

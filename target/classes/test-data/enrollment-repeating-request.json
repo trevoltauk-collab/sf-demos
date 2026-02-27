@@ -1,0 +1,38 @@
+{
+  "templateId": "templates/enrollment-repeating-group.yaml",
+  "data": {
+    "application": {
+      "applicationId": "APP-2024-12345",
+      "applicationDate": "2024-01-15",
+      "status": "PENDING",
+      "applicants": [
+        {
+          "type": "PRIMARY",
+          "demographic": {
+            "firstName": "John",
+            "lastName": "Smith",
+            "dateOfBirth": "1985-06-15"
+          }
+        },
+        {
+          "type": "CHILD",
+          "demographic": {
+            "firstName": "Emily",
+            "lastName": "Smith",
+            "dateOfBirth": "2015-08-10",
+            "gender": "Female"
+          }
+        },
+        {
+          "type": "CHILD",
+          "demographic": {
+            "firstName": "Oliver",
+            "lastName": "Smith",
+            "dateOfBirth": "2018-11-25",
+            "gender": "Male"
+          }
+        }
+      ]
+    }
+  }
+}

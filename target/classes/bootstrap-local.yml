@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: doc-gen-service
+  config:
+    import: optional:configserver:
+  cloud:
+    config:
+      fail-fast: false

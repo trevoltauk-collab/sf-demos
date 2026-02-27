@@ -1,0 +1,17 @@
+templateId: plan-comparison-values-test
+description: Test template mapping for plan comparison values-only (preserves template formulas)
+
+# Use the values-only transformer output (injected as comparisonMatrixValues)
+config:
+  columnSpacing: 1
+  valuesOnly: true
+
+sections:
+  - sectionId: plan_comparison_test
+    type: EXCEL
+    templatePath: comparison-template.xlsx
+    mappingType: JSONPATH
+    fieldMappings:
+      # Map the values-only matrix into the region to the right of pre-filled Benefit names
+      # Sheet-qualified range example (adjust sheet name if needed in your template)
+      "Sheet1!B2:D4": "$.comparisonMatrixValues"
