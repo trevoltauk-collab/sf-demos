@@ -1,0 +1,340 @@
+# ============================================================
+# Advanced Plan Comparison Mapping
+# Demonstrates all complex real-world scenarios:
+#
+#  1. COLUMN SPACING  — blank spacer columns between plans
+#  2. ROW SPACING     — blank gap rows between benefit groups
+#  3. FORMULA SKIP    — formula cells inside the data region untouched
+#  4. MERGE HEADERS   — category spans, plan name spans, benefit name spans
+#  5. COMPOSITE FIELDS — multi-field cells assembled from JSON parts
+#  6. GROUPED LIST    — benefits grouped by category with header rows
+#  7. MULTI-ROW ITEMS — one benefit occupies 2 rows (name + sub-label)
+# ============================================================
+
+template:
+  id: plan-comparison-advanced
+  file: templates/plan_comparison_advanced.xlsx
+  description: "Advanced plan comparison with all spacing, merge and composite scenarios"
+
+sheets:
+
+  # ══════════════════════════════════════════════════════════════
+  # Sheet 1: Plan Comparison
+  # ══════════════════════════════════════════════════════════════
+  - name: "Plan Comparison"
+    mappings:
+
+      # ── 1. Static scalar header cells ─────────────────────────────────────
+      - id: report_title
+        type: CELL
+        cell: B2
+        jsonPath: "$.reportTitle"
+        dataType: STRING
+
+      - id: effective_date
+        type: CELL
+        cell: B3
+        jsonPath: "$.effectiveDate"
+        dataType: DATE
+        format: "MM/dd/yyyy"
+
+      - id: employer_name
+        type: CELL
+        cell: B4
+        jsonPath: "$.employerName"
+        dataType: STRING
+
+      # ── 2. MERGE_HEADER — "PLAN COMPARISON" title spanning the full header ─
+      # Merges cells C6:J6, writes the label centred across all plan columns
+      - id: section_title_merge
+        type: MERGE_HEADER
+        merge:
+          startCell: C6
+          endCell: J6
+          value: "PROPOSED PLAN OPTIONS — 2025"
+          dataType: STRING
+          align: CENTER
+
+      # ── 3. MULTI_COL with COLUMN GAP ─────────────────────────────────────
+      # Plans land in columns C, E, G, I (column D, F, H are left as spacers).
+      # The template has borders/shading on C/E/G/I; D/F/H are blank spacer cols.
+      #
+      # Strategy: use startCol + columnGap instead of explicit columnMapping
+      - id: plan_name_headers
+        type: MULTI_COL
+        jsonPath: "$.plans[*]"
+        startRow: 8
+        startCol: C        # First plan starts in column C
+        columnGap: 1       # One blank spacer column between each plan (C, E, G, I)
+        columns:
+          # Plan name — merged across two columns (the plan col + its spacer col)
+          # e.g. plan 1 name merges C8:D8
+          - field: "planName"
+            dataType: STRING
+            mergeCell: true
+            colSpan: 2         # spans the plan column + the spacer column
+          - field: "carrier"
+            dataType: STRING
+          - field: "planType"
+            dataType: STRING
+          - field: "networkType"
+            dataType: STRING
+
+      # ── 4. MULTI_COL — cost summary with COMPOSITE fields and COLUMN GAP ──
+      # "Deductible" cell shows "Ind: $500 / Fam: $1,000" assembled from two fields.
+      - id: plan_cost_summary
+        type: MULTI_COL
+        jsonPath: "$.plans[*]"
+        startRow: 13
+        startCol: C
+        columnGap: 1
+        # Skip column E row 2 (row offset 2) which holds a running-total formula
+        skipFormulaCols:
+          - "E:2"
+        columns:
+          - field: "monthlyPremium"
+            dataType: CURRENCY
+
+          # Composite: "Ind: $500 | Fam: $1,000" from two nested fields
+          - composite:
+              parts: ["Ind: $", "$deductible.individual", "  |  Fam: $", "$deductible.family"]
+              separator: ""
+              numericFormat: "#,##0"
+            dataType: STRING
+
+          # Composite: out-of-pocket max same pattern
+          - composite:
+              parts: ["Ind: $", "$outOfPocketMax.individual", "  |  Fam: $", "$outOfPocketMax.family"]
+              separator: ""
+              numericFormat: "#,##0"
+            dataType: STRING
+
+          - field: "coinsurance"
+            dataType: PERCENTAGE
+
+          # Formula column — employee monthly cost = premium * employeeSharePct
+          # {ROW} is substituted with the actual Excel row at write time
+          - formula: "=C{ROW}*$B$20"
+            # Note: column E row 2 (offset 2) was in skipFormulaCols above;
+            # for other rows the formula IS written from the YAML formula key
+
+      # ── 5. GROUPED_LIST with GAP ROWS, MERGE, FORMULA SKIP ───────────────
+      # Benefits array is grouped by "category".
+      # Each category gets a bold merged header row.
+      # Within each category, benefits are written with a 1-row gap after each item.
+      # Column F contains a subtotal formula — never overwritten.
+      - id: benefits_grouped
+        type: GROUPED_LIST
+        jsonPath: "$.benefits[*]"
+        startRow: 25
+        groupByField: "category"
+        gapRows: 0              # no gap between benefit rows within a group
+        rowStepSize: 1
+        preserveRowStyle: true
+        insertRowsIfNeeded: true
+        mergeHeaderCols: "B:J"  # each category header spans full width of benefit table
+
+        # Style for group header rows: copy from template row 25 (the first header placeholder)
+        groupHeaderStyleRow: 25
+
+        # Columns written in the GROUP HEADER ROW
+        groupHeaderColumns:
+          - col: B
+            field: "$groupKey"  # special key = the grouped field value (e.g. "Medical")
+            dataType: STRING
+
+        # Formula columns inside the data region to skip
+        # Column J holds a "number of plans covering this benefit" formula
+        skipFormulaCols:
+          - J                   # skip col J entirely (template formula)
+
+        # Per-item row merges: benefit name (col B) spans into col C
+        rowMerges:
+          - rowOffset: 0
+            startCol: B
+            endCol: C           # B:C merged for each benefit name row
+
+        # Columns for each benefit detail row
+        columns:
+          - col: B
+            field: "benefitName"
+            dataType: STRING
+            # B:C merged via rowMerges above
+
+          - col: D
+            field: "plan1Coverage"
+            dataType: STRING
+
+          - col: E
+            field: "plan1PriorAuth"
+            dataType: STRING
+
+          - col: F
+            field: "plan2Coverage"
+            dataType: STRING
+
+          - col: G
+            field: "plan2PriorAuth"
+            dataType: STRING
+
+          - col: H
+            field: "plan3Coverage"
+            dataType: STRING
+
+          - col: I
+            field: "plan3PriorAuth"
+            dataType: STRING
+
+          # col J: SKIPPED (formula) — do not add a column def for it
+
+          - col: K
+            field: "notes"
+            dataType: STRING
+
+      # ── 6. LIST with ROW SPACING ─────────────────────────────────────────
+      # Rating tiers: each item occupies 2 physical rows (gapRows=1 between items).
+      # Row 0: tier name + composite age range + monthly rate
+      # Row 1: blank gap row — leave template formatting/borders intact
+      - id: rating_tiers
+        type: LIST
+        jsonPath: "$.ratingTiers[*]"
+        startRow: 60
+        gapRows: 1              # one blank gap row after each tier item
+        preserveRowStyle: true
+        insertRowsIfNeeded: true
+        columns:
+          - col: B
+            field: "tier"
+            dataType: STRING
+            rowOffset: 0        # written on the item's primary row
+
+          # Composite age range: "Age 18 - 29"
+          - col: C
+            composite:
+              parts: ["Age ", "$ageFrom", " - ", "$ageTo"]
+              separator: ""
+            dataType: STRING
+            rowOffset: 0
+
+          - col: D
+            field: "monthlyRate"
+            dataType: CURRENCY
+            rowOffset: 0
+
+          - col: E
+            formula: "=D{ROW}*12"  # annual rate — Excel formula
+            rowOffset: 0
+
+          - col: F
+            field: "tobaccoSurcharge"
+            dataType: CURRENCY
+            rowOffset: 0
+
+          - col: G
+            formula: "=D{ROW}+F{ROW}"  # total with surcharge
+            rowOffset: 0
+
+      # ── 7. MULTI_COL with MULTI-ROW items ────────────────────────────────
+      # Plan header block where each plan occupies 3 rows:
+      #   Row 0: plan name (merged across the plan col + spacer col)
+      #   Row 1: carrier name
+      #   Row 2: composite string "PPO | Large Network"
+      - id: plan_detail_header
+        type: MULTI_COL
+        jsonPath: "$.plans[*]"
+        startRow: 70
+        startCol: C
+        columnGap: 1
+        columns:
+          - field: "planName"
+            dataType: STRING
+            rowOffset: 0
+            mergeCell: true
+            colSpan: 2         # plan name spans plan-col + spacer-col
+
+          - field: "carrier"
+            dataType: STRING
+            rowOffset: 1
+
+          # Composite: "PPO | Large Network" assembled from planType and networkType
+          - composite:
+              parts: ["$planType", " | ", "$networkType"]
+              separator: ""
+            dataType: STRING
+            rowOffset: 2
+
+      # ── 8. MERGE_HEADER — dynamic value from JSON ────────────────────────
+      # A disclaimer banner spanning the full footer row
+      - id: footer_merge
+        type: MERGE_HEADER
+        merge:
+          startCell: B80
+          endCell: K80
+          jsonPath: "$.disclaimer"
+          dataType: STRING
+          align: LEFT
+
+  # ══════════════════════════════════════════════════════════════
+  # Sheet 2: Rating Schedule (with formula-skip and row spacing)
+  # ══════════════════════════════════════════════════════════════
+  - name: "Rating Schedule"
+    mappings:
+
+      - id: rs_product_name
+        type: CELL
+        cell: C3
+        jsonPath: "$.productName"
+        dataType: STRING
+
+      - id: rs_effective_date
+        type: CELL
+        cell: C4
+        jsonPath: "$.effectiveDate"
+        dataType: DATE
+        format: "MM/dd/yyyy"
+
+      # Rates with a gap row every 4 items (one gap after each age-band block).
+      # Column H holds a "weighted average" formula — skip it.
+      # Column I holds a "variance vs base" formula — skip it on row offset 0 only.
+      - id: rate_table
+        type: LIST
+        jsonPath: "$.rates[*]"
+        startRow: 10
+        gapRows: 0
+        preserveRowStyle: true
+        insertRowsIfNeeded: true
+        skipFormulaCols:
+          - H            # skip col H (weighted avg formula) for all rows
+          - I:0          # skip col I only on the primary item row (row offset 0)
+        columns:
+          - col: A
+            field: "tier"
+            dataType: STRING
+
+          # Composite age band: "18-29"
+          - col: B
+            composite:
+              parts: ["$ageFrom", "-", "$ageTo"]
+              separator: ""
+            dataType: STRING
+
+          - col: C
+            field: "monthlyRate"
+            dataType: CURRENCY
+
+          - col: D
+            formula: "=C{ROW}*12"      # annual = monthly * 12
+
+          - col: E
+            field: "tobaccoSurcharge"
+            dataType: CURRENCY
+
+          - col: F
+            formula: "=C{ROW}+E{ROW}"  # total with surcharge
+
+          - col: G
+            field: "enrolledCount"
+            dataType: NUMBER
+
+          # col H: skip (weighted avg formula in template)
+          # col I row 0: skip (variance formula); other row offsets fine (none here)
