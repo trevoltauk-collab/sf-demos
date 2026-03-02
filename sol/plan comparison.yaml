@@ -1,0 +1,157 @@
+# ============================================================
+# Plan Comparison Template Mapping
+# Template: plan_comparison.xlsx
+#
+# Mapping Types:
+#   CELL      - single cell, direct JSON path value
+#   CELL_EXPR - single cell with expression/transformation
+#   LIST      - repeating rows from a JSON array
+#   MULTI_COL - same row, different columns per array item
+# ============================================================
+
+template:
+  id: plan-comparison
+  file: templates/plan_comparison.xlsx
+  description: "Side-by-side comparison of insurance plans with benefits"
+
+sheets:
+  - name: "Plan Comparison"
+    mappings:
+
+      # ── Header / Metadata ─────────────────────────────────
+      - id: report_title
+        type: CELL
+        cell: B2
+        jsonPath: "$.reportTitle"
+        dataType: STRING
+
+      - id: effective_date
+        type: CELL
+        cell: B3
+        jsonPath: "$.effectiveDate"
+        dataType: DATE
+        format: "MM/dd/yyyy"
+
+      - id: employer_name
+        type: CELL
+        cell: B4
+        jsonPath: "$.employerName"
+        dataType: STRING
+
+      - id: prepared_by
+        type: CELL
+        cell: F3
+        jsonPath: "$.preparedBy"
+        dataType: STRING
+
+      # ── Plan Headers (one column per plan: C, D, E, F) ───
+      # Uses MULTI_COL to map array items to specific columns
+      - id: plan_headers
+        type: MULTI_COL
+        jsonPath: "$.plans[*]"
+        startRow: 7
+        columns:
+          - field: "planName"
+            dataType: STRING
+          - field: "carrier"
+            dataType: STRING
+          - field: "planType"
+            dataType: STRING
+          - field: "networkSize"
+            dataType: STRING
+        columnMapping:
+          0: C   # Plan 1 → column C
+          1: D   # Plan 2 → column D
+          2: E   # Plan 3 → column E
+          3: F   # Plan 4 → column F
+
+      # ── Premium & Cost Summary ───────────────────────────
+      - id: plan_premiums
+        type: MULTI_COL
+        jsonPath: "$.plans[*]"
+        startRow: 12
+        columns:
+          - field: "monthlyPremium"
+            dataType: CURRENCY
+          - field: "annualPremium"
+            dataType: CURRENCY
+          - field: "employerContribution"
+            dataType: CURRENCY
+          - field: "employeeContribution"
+            dataType: CURRENCY
+        columnMapping:
+          0: C
+          1: D
+          2: E
+          3: F
+
+      # ── Cost Sharing ─────────────────────────────────────
+      - id: plan_cost_sharing
+        type: MULTI_COL
+        jsonPath: "$.plans[*]"
+        startRow: 18
+        columns:
+          - field: "deductible.individual"
+            dataType: CURRENCY
+          - field: "deductible.family"
+            dataType: CURRENCY
+          - field: "outOfPocketMax.individual"
+            dataType: CURRENCY
+          - field: "outOfPocketMax.family"
+            dataType: CURRENCY
+          - field: "coinsurance"
+            dataType: PERCENTAGE
+        columnMapping:
+          0: C
+          1: D
+          2: E
+          3: F
+
+      # ── Benefits Grid (repeating rows) ───────────────────
+      # Row A = benefit label (col B), then plan values in C/D/E/F
+      - id: benefit_rows
+        type: LIST
+        jsonPath: "$.benefits[*]"
+        startRow: 26
+        rowStepSize: 1
+        preserveRowStyle: true  # copy formatting from template row 26
+        columns:
+          - col: B
+            field: "benefitName"
+            dataType: STRING
+          - col: C
+            field: "plan1Coverage"
+            dataType: STRING
+          - col: D
+            field: "plan2Coverage"
+            dataType: STRING
+          - col: E
+            field: "plan3Coverage"
+            dataType: STRING
+          - col: F
+            field: "plan4Coverage"
+            dataType: STRING
+          - col: G
+            field: "notes"
+            dataType: STRING
+
+      # ── Footer ───────────────────────────────────────────
+      - id: disclaimer
+        type: CELL
+        cell: B50
+        jsonPath: "$.disclaimer"
+        dataType: STRING
+
+  - name: "Summary"
+    mappings:
+      - id: summary_employer
+        type: CELL
+        cell: C3
+        jsonPath: "$.employerName"
+        dataType: STRING
+
+      - id: summary_plan_count
+        type: CELL_EXPR
+        cell: C4
+        expression: "plans.size()"   # SpEL expression against root JSON object
+        dataType: NUMBER
