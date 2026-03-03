@@ -1,0 +1,193 @@
+# ============================================================
+# Benefit Comparison Table Mapping
+#
+# Table structure:
+#   Col B: "Benefits" label + benefit display names (pre-populated in template)
+#   Col C: Plan 1 coverage values
+#   Col D: Plan 2 coverage values
+#   Col E: Plan 3 coverage values
+#   Col F: Plan 4 coverage values
+#
+# Strategy: PRE-POPULATED benefit names in template.
+#   The engine does NOT write benefit names.
+#   It uses benefitRowMap (benefitKey → Excel row) to locate the correct row
+#   for each benefit, then fills plan columns via lookup against JSON data.
+#
+# Why pre-populated:
+#   - Template designer controls row order, grouping, merged category headers,
+#     row heights, and conditional formatting independently of data.
+#   - Formula cells (e.g. "# plans covering") stay anchored at known rows.
+#   - New benefits in JSON that aren't in benefitRowMap are written to an
+#     overflow section rather than silently dropped.
+#
+# Benefit key matching:
+#   The JSON payload carries a "benefitKey" field on each benefit object.
+#   The YAML benefitRowMap maps those keys to 1-based Excel row numbers.
+#   Display names in col B are set in the template — never touched by the engine.
+# ============================================================
+
+template:
+  id: benefit-comparison
+  file: templates/benefit_comparison.xlsx
+  description: "Plan benefit comparison — pre-populated benefit rows, key-based lookup"
+
+sheets:
+  - name: "Benefit Comparison"
+    mappings:
+
+      # ── Header metadata ────────────────────────────────────────────────────
+      - id: employer_name
+        type: CELL
+        cell: B2
+        jsonPath: "$.employerName"
+        dataType: STRING
+
+      - id: effective_date
+        type: CELL
+        cell: B3
+        jsonPath: "$.effectiveDate"
+        dataType: DATE
+        format: "MM/dd/yyyy"
+
+      # ── Plan name headers (MULTI_COL across C7:F7) ────────────────────────
+      # Plan names land in the header row next to the "Benefits" column header.
+      # columnGap: 0 = adjacent columns; change to 1 if spacers are needed.
+      - id: plan_name_row
+        type: MULTI_COL
+        jsonPath: "$.plans[*]"
+        startRow: 7
+        startCol: C
+        columnGap: 0
+        columns:
+          - field: "planName"
+            dataType: STRING
+          - field: "carrier"
+            dataType: STRING
+            rowOffset: 1        # carrier name on row 8
+          - field: "planType"
+            dataType: STRING
+            rowOffset: 2        # plan type on row 9
+
+      # ── Benefit comparison table (BENEFIT_LOOKUP type) ────────────────────
+      #
+      # benefitRowMap: maps each benefitKey → 1-based Excel row.
+      #   Keys must match the "benefitKey" field in each plan's benefits array.
+      #   Row numbers match where that benefit's display name is pre-typed in col B.
+      #
+      # planColumns: maps plan array index → Excel column for coverage values.
+      #   index 0 = first plan in $.plans[*], etc.
+      #
+      # coverageField: the field within each benefit object that holds the coverage string.
+      # priorAuthField: optional second field written to an adjacent column.
+      #
+      # fallbackValue: written when a plan does not include a given benefit.
+      # overflowStartRow: where to write benefits that appear in JSON but are not in
+      #   benefitRowMap (so nothing is silently lost).
+      - id: benefit_table
+        type: BENEFIT_LOOKUP
+        jsonPath: "$.plans[*]"
+        coverageField: "coverage"
+        priorAuthField: "priorAuth"
+        fallbackValue: "Not Covered"
+        overflowStartRow: 70        # benefits not in benefitRowMap land here
+        overflowCol: B              # overflow section starts in col B
+
+        planColumns:
+          0: C    # plans[0] coverage values → column C
+          1: D    # plans[1] coverage values → column D
+          2: E    # plans[2] coverage values → column E
+          3: F    # plans[3] coverage values → column F
+
+        priorAuthColumns:           # optional: prior auth flag columns per plan
+          0: C    # priorAuth for plans[0] goes in same column — see priorAuthRowOffset
+          1: D
+          2: E
+          3: F
+
+        priorAuthRowOffset: 0       # 0 = same row as coverage (in an adjacent cell
+                                    # defined by priorAuthSubCol below)
+                                    # set to 1 = write on the row below coverage
+
+        # benefitKeyField: field within each benefit in the plan's benefits list
+        # that carries the stable machine key used to look up the row number.
+        benefitKeyField: "benefitKey"
+
+        # benefitRowMap: benefitKey → 1-based Excel row number.
+        # This is the core lookup table — the template designer owns this.
+        benefitRowMap:
+
+          # ── Medical ─────────────────────────────────
+          pcp_visit:              12
+          specialist_visit:       13
+          urgent_care:            14
+          emergency_room:         15
+          inpatient_hospital:     16
+          outpatient_surgery:     17
+          lab_xray:               18
+          imaging_advanced:       19
+
+          # ── Maternity ───────────────────────────────
+          prenatal_care:          22
+          delivery_inpatient:     23
+          postnatal_care:         24
+
+          # ── Behavioral Health ───────────────────────
+          bh_outpatient:          27
+          bh_inpatient:           28
+          substance_outpatient:   29
+          substance_inpatient:    30
+
+          # ── Pharmacy ────────────────────────────────
+          rx_tier1_generic:       33
+          rx_tier2_preferred:     34
+          rx_tier3_nonpreferred:  35
+          rx_tier4_specialty:     36
+          rx_mail_order:          37
+
+          # ── Preventive ──────────────────────────────
+          annual_physical:        40
+          immunizations:          41
+          cancer_screening:       42
+          well_woman:             43
+
+          # ── Ancillary ───────────────────────────────
+          vision_exam:            46
+          dental_preventive:      47
+          chiropractic:           48
+          acupuncture:            49
+          hearing_aids:           50
+
+          # ── Cost Sharing (summary rows) ─────────────
+          deductible_individual:  54
+          deductible_family:      55
+          oop_max_individual:     56
+          oop_max_family:         57
+          coinsurance:            58
+          copay_pcp:              59
+
+  # ══════════════════════════════════════════════════════════
+  # Sheet 2: Summary — aggregate stats derived from benefit data
+  # ══════════════════════════════════════════════════════════
+  - name: "Summary"
+    mappings:
+      - id: summary_employer
+        type: CELL
+        cell: B3
+        jsonPath: "$.employerName"
+        dataType: STRING
+
+      - id: summary_plan_names
+        type: MULTI_COL
+        jsonPath: "$.plans[*]"
+        startRow: 6
+        startCol: C
+        columnGap: 0
+        columns:
+          - field: "planName"
+            dataType: STRING
+          - field: "monthlyPremium"
+            dataType: CURRENCY
+            rowOffset: 1
+          - field: "deductible.individual"
+            dataType: CURRENCY
+            rowOffset: 2
