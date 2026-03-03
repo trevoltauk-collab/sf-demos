@@ -1,6 +1,0 @@
-templateId: test-circular-b
-baseTemplateId: test-circular-a
-sections:
-  - sectionId: section-b
-    type: ACROFORM
-    templatePath: form-b.pdf

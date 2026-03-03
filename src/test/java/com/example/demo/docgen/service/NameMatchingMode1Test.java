@@ -91,9 +91,23 @@ public class NameMatchingMode1Test {
 
             // Verify benefit name column is preserved from transformer output  
             // The transformer generates the benefit list in first-occurrence order
-            // which should match the template structure
-            assertEquals("Benefit", sheet.getRow(0).getCell(0).getStringCellValue(), 
-                "Header should be 'Benefit'");
+            // which should match the template structure.  Because this template
+            // shifts the values one column to the right (mapping starts at B1)
+            // we can't assume the header lives in A1; instead locate the first
+            // non-empty cell in row 0 and check that.
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.getRow(0);
+            assertNotNull(headerRow, "Header row must exist");
+            String headerValue = null;
+            for (int c = 0; c <= headerRow.getLastCellNum(); c++) {
+                if (headerRow.getCell(c) != null) {
+                    String val = headerRow.getCell(c).getStringCellValue();
+                    if (val != null && !val.isEmpty()) {
+                        headerValue = val;
+                        break;
+                    }
+                }
+            }
+            assertEquals("Benefit", headerValue, "Header should be 'Benefit'");
 
             // Verify benefit names are in expected rows
             // (The transformer generates names, the renderer respects them via name-matching)

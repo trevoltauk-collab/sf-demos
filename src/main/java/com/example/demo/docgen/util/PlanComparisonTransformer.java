@@ -253,7 +253,22 @@ public class PlanComparisonTransformer {
                 stripped.add(new ArrayList<>());
             } else {
                 // drop the first element (benefit or header label)
-                stripped.add(new ArrayList<>(row.subList(1, row.size())));
+                List<Object> sub = new ArrayList<>(row.subList(1, row.size()));
+                // If the first column after dropping the benefit is an empty
+                // spacing column (common when columnSpacingWidth > 0), drop
+                // that as well so values-only matrices align to the first
+                // mapped column (e.g. B1).
+                if (!sub.isEmpty()) {
+                    Object first = sub.get(0);
+                    if (first == null || "".equals(first.toString())) {
+                        if (sub.size() > 1) {
+                            sub = new ArrayList<>(sub.subList(1, sub.size()));
+                        } else {
+                            sub = new ArrayList<>();
+                        }
+                    }
+                }
+                stripped.add(sub);
             }
         }
         return stripped;
@@ -295,6 +310,8 @@ public class PlanComparisonTransformer {
             int columnSpacingWidth) {
         Map<String, Object> result = new HashMap<>(data);
         List<List<Object>> matrix = transformPlansToMatrixValuesOnly(plans, benefitNameField, benefitValueField, columnSpacingWidth, 0);
+        // Debug: print matrix for tests to help diagnose alignment issues
+        System.out.println("[DEBUG transformer values-only matrix] " + matrix);
         result.put("comparisonMatrixValues", matrix);
         return result;
     }

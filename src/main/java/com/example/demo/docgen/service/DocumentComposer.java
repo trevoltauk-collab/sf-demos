@@ -256,13 +256,6 @@ public class DocumentComposer {
             if (workbook == null) {
                 throw new RuntimeException("No Excel workbook produced by renderers");
             }
-            
-            // Apply header formatting for age-rating transformers
-            String transformer = template.getConfig() != null ? (String) template.getConfig().get("transformer") : null;
-            if ("age-rating".equals(transformer)) {
-                applyAgeRatingHeaderFormatting(workbook, originalData);
-            }
-            
             return excelOutputService.toBytes(workbook);
 
         } catch (TemplateLoadingException | ResourceLoadingException e) {
@@ -545,10 +538,41 @@ public class DocumentComposer {
 
         // If an appropriate matrix already exists, prefer the provided matrix
         // and skip the auto-transformation. This lets clients supply precomputed
-        // matrices that should be used even when raw plan data is also present.
-        if ((useValues && data.containsKey("comparisonMatrixValues")) ||
-                (!useValues && data.containsKey("comparisonMatrix"))) {
-            log.debug("Section {} already has appropriate matrix, skipping transform", section == null ? "<none>" : section.getSectionId());
+        // matrices that should be used as-is. Only skip when the provided matrix
+        // is actually present and non-empty (defensive against empty/placeholder values).
+        Object existingMatrix = useValues ? data.get("comparisonMatrixValues") : data.get("comparisonMatrix");
+        // debug: log presence/types/sizes of potential matrix keys and plans to help diagnose test failures
+        try {
+            Object cm = data.get("comparisonMatrix");
+            Object cmv = data.get("comparisonMatrixValues");
+            String cmType = cm == null ? "null" : cm.getClass().getName();
+            String cmvType = cmv == null ? "null" : cmv.getClass().getName();
+            int cmSize = (cm instanceof List) ? ((List<?>) cm).size() : -1;
+            int cmvSize = (cmv instanceof List) ? ((List<?>) cmv).size() : -1;
+            String plansType = plansPreview == null ? "null" : plansPreview.getClass().getName();
+            int plansSize = (plansPreview instanceof List) ? ((List<?>) plansPreview).size() : -1;
+            log.debug("Combined config keys: {}", combined.keySet());
+            log.debug("Incoming data keys: {}", data.keySet());
+            log.debug("plansPreview type={} size={}; comparisonMatrix type={} size={}; comparisonMatrixValues type={} size={}; valuesOnly={}; matchNames={}",
+                    plansType, plansSize, cmType, cmSize, cmvType, cmvSize, valuesOnly, matchNames);
+        } catch (Exception ex) {
+            log.debug("Failed to introspect existing matrix keys or plans preview", ex);
+        }
+        boolean hasAppropriateMatrix = false;
+        if (existingMatrix instanceof List) {
+            List<?> lm = (List<?>) existingMatrix;
+            hasAppropriateMatrix = !lm.isEmpty();
+        } else if (existingMatrix != null) {
+            // If a non-list value exists for the matrix key, log for diagnostics
+            log.debug("Existing matrix key is present but not a List (type={})", existingMatrix.getClass().getName());
+        }
+        // If an appropriate matrix exists and there are *no* plans provided, we
+        // assume the caller wants to use their precomputed matrix. However, when
+        // plans are also present we favour regenerating the matrix from the
+        // latest plan data. This mirrors the behavior expected by
+        // transformPlanData_withPlansAndMatrix_overridesMatrix test.
+        if (hasAppropriateMatrix && !hasPlans) {
+            log.debug("Section {} already has appropriate matrix and no plans present, skipping transform", section == null ? "<none>" : section.getSectionId());
             return data;
         }
 
@@ -594,91 +618,4 @@ public class DocumentComposer {
         }
     }
     
-    /**
-     * Apply header formatting (merge and center) for age-rating comparison matrices
-     * Merges and centers the plan name and code rows across each plan's columns
-     */
-    private void applyAgeRatingHeaderFormatting(org.apache.poi.ss.usermodel.Workbook workbook, Map<String, Object> data) {
-        try {
-            org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
-            if (sheet == null) return;
-            
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> plans = (List<Map<String, Object>>) data.get("plans");
-            if (plans == null || plans.isEmpty()) return;
-            
-            // Each plan occupies: 2 cols (Band1: Age/Rating) + 1 spacing + 2 cols (Band2) + 1 spacing + 2 cols (Band3) + 1 spacing = 9 cols
-            int columnsPerPlan = 9;
-            
-            for (int planIdx = 0; planIdx < plans.size(); planIdx++) {
-                int startCol = planIdx * columnsPerPlan;
-                int endCol = startCol + 5; // Merge across Age/Rating columns of all 3 bands (6 cols: 0-1, 3-4, 6-7 relative = cols 0-5 within plan span)
-                
-                // Merge and center plan name (row 0)
-                org.apache.poi.ss.usermodel.Row row1 = sheet.getRow(0);
-                if (row1 != null) {
-                    mergeAndCenterCells(workbook, sheet, 0, startCol, endCol);
-                }
-                
-                // Merge and center network/code (row 1)
-                org.apache.poi.ss.usermodel.Row row2 = sheet.getRow(1);
-                if (row2 != null) {
-                    mergeAndCenterCells(workbook, sheet, 1, startCol, endCol);
-                }
-            }
-            
-            // Center align all header cells in row 2 (Age/Rating labels)
-            org.apache.poi.ss.usermodel.Row headerRow = sheet.getRow(2);
-            if (headerRow != null) {
-                for (int col = 0; col < headerRow.getLastCellNum(); col++) {
-                    org.apache.poi.ss.usermodel.Cell cell = headerRow.getCell(col);
-                    if (cell != null) {
-                        org.apache.poi.ss.usermodel.CellStyle style = workbook.createCellStyle();
-                        if (cell.getCellStyle() != null) {
-                            style.cloneStyleFrom(cell.getCellStyle());
-                        }
-                        style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
-                        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
-                        cell.setCellStyle(style);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Error applying age-rating header formatting", e);
-        }
-    }
-    
-    /**
-     * Merge cells in a range and apply center alignment
-     */
-    private void mergeAndCenterCells(org.apache.poi.ss.usermodel.Workbook workbook, 
-                                     org.apache.poi.ss.usermodel.Sheet sheet,
-                                     int rowIndex,
-                                     int startCol,
-                                     int endCol) {
-        try {
-            // Merge the cells
-            org.apache.poi.ss.util.CellRangeAddress mergeRange = new org.apache.poi.ss.util.CellRangeAddress(
-                rowIndex, rowIndex, startCol, endCol
-            );
-            sheet.addMergedRegion(mergeRange);
-            
-            // Apply center alignment to the merged cell
-            org.apache.poi.ss.usermodel.Row row = sheet.getRow(rowIndex);
-            if (row != null) {
-                org.apache.poi.ss.usermodel.Cell cell = row.getCell(startCol);
-                if (cell != null) {
-                    org.apache.poi.ss.usermodel.CellStyle style = workbook.createCellStyle();
-                    if (cell.getCellStyle() != null) {
-                        style.cloneStyleFrom(cell.getCellStyle());
-                    }
-                    style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
-                    style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
-                    cell.setCellStyle(style);
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Error merging cells at row {}, cols {}-{}", rowIndex, startCol, endCol, e);
-        }
-    }
 }

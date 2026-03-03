@@ -108,6 +108,9 @@ public class DocumentController {
             @org.springframework.web.bind.annotation.RequestParam(required = false) java.util.Map<String, String> queryParams) {
         log.info("Received Excel generation request for template: {} from namespace: {}", request.getTemplateId(), request.getNamespace());
         try {
+            if (log.isDebugEnabled()) {
+                log.debug("Incoming Excel request data keys: {}", request.getData() == null ? null : request.getData().keySet());
+            }
             // Extract variables (same as PDF endpoint)
             java.util.Map<String, Object> variables = extractVariablesForCacheLookup(request, queryParams);
             request.setVariables(variables);

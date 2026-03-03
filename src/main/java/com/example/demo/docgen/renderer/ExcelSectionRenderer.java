@@ -712,9 +712,10 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
         Cell cell = row.getCell(colIndex);
 
         // If this cell is part of a merged region but not the top-left cell,
-        // do nothing.  Writing into the leading cell propagates to the whole
-        // region automatically.  This avoids overwriting merged spans when
-        // filling a grid.
+        // do not write to it. Previously we redirected writes to the
+        // top-left cell, but that causes later entries in a range fill to
+        // overwrite earlier values in the leading cell. Tests expect
+        // non-leading merged cells to be skipped instead.
         if (isPartOfMergedRegion(sheet, rowIndex, colIndex)) {
             CellRangeAddress merged = getMergedRegion(sheet, rowIndex, colIndex);
             if (merged != null && (merged.getFirstRow() != rowIndex || merged.getFirstColumn() != colIndex)) {
@@ -729,7 +730,19 @@ public class ExcelSectionRenderer implements SectionRenderer, ExcelRenderer {
 
         // Skip overwriting non-blank cells if overwrite flag is false
         if (!overwrite && cell != null && cell.getCellType() != CellType.BLANK) {
-            return;
+            // If the cell contains an empty string (often created by templates),
+            // treat it as blank so we can overwrite it. This preserves existing
+            // non-empty template content while allowing intended replacements.
+            if (cell.getCellType() == CellType.STRING) {
+                String v = cell.getStringCellValue();
+                if (v == null || v.trim().isEmpty()) {
+                    // allow overwrite
+                } else {
+                    return;
+                }
+            } else {
+                return;
+            }
         }
 
         if (cell == null) cell = row.createCell(colIndex);

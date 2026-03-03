@@ -1,7 +1,0 @@
-templateId: test-fragment-circular
-includedFragments:
-  - test-fragment-circular-dep
-sections:
-  - sectionId: section-main
-    type: ACROFORM
-    templatePath: form.pdf

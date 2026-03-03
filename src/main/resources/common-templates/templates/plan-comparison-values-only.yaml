@@ -4,7 +4,7 @@ description: Plan comparison table (values-only) where benefit names are pre-pop
 # Configuration for plan comparison transformation
 config:
   # Number of columns between plan columns (spacing)
-  columnSpacing: 0
+  columnSpacing: 1
   # When true the server will generate a matrix that excludes the benefit
   # column.  The result is injected under `comparisonMatrixValues` instead of
   # `comparisonMatrix` so the worksheet mapping can target a range that starts

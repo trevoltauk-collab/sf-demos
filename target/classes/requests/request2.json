@@ -1,7 +1,0 @@
-{
-  "namespace": "common-templates",
-  "templateId": "foo-explicit",
-  "data": {
-    "altPlans": [ …same plan objects as above… ]
-  }
-}

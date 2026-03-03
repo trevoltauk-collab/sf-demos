@@ -1,6 +1,0 @@
-templateId: test-circular-self
-baseTemplateId: test-circular-self
-sections:
-  - sectionId: section1
-    type: ACROFORM
-    templatePath: form.pdf

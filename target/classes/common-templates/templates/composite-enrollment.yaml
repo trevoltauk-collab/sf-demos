@@ -1,7 +1,0 @@
-templateId: composite-enrollment
-baseTemplateId: base-enrollment-${application.state}
-sections:
-  - sectionId: applicant-info
-    type: ACROFORM
-    templatePath: forms/applicant-form.pdf
-    
