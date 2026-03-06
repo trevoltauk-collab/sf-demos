@@ -67,3 +67,52 @@ Since you are already using flying-saucer-pdf-openpdf, you have done 90% of the 
  * Global Search: Search your entire codebase for the string import com.itextpdf. If zero results come up, your source code is clean.
  * Transitive Check: Use the commands above to ensure a third-party reporting tool or library isn't bringing iText back in through the "back door."
 Would you like me to help you write a Maven "exclusion" rule to block any commercial iText versions from accidentally entering your project again?
+
+
+
+To ensure no commercial iText versions accidentally "sneak" back into your project through other dependencies (transitive dependencies), you can use an Exclusion Rule in Maven or a Capability/Substitution in Gradle.
+This is a "set it and forget it" safety net for your migration.
+1. Maven: The Global Exclusion
+The cleanest way to handle this in Maven is to add an exclusion to any library that might be pulling in the old iText. However, if you want to be aggressive, you can use the Maven Enforcer Plugin. This will actually fail your build if an AGPL version of iText is detected.
+Add this to your pom.xml under <build><plugins>:
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-enforcer-plugin</artifactId>
+    <version>3.4.1</version>
+    <executions>
+        <execution>
+            <id>enforce-no-itext-agpl</id>
+            <goals>
+                <goal>enforce</goal>
+            </goals>
+            <configuration>
+                <rules>
+                    <bannedDependencies>
+                        <excludes>
+                            <exclude>com.itextpdf:itextpdf</exclude>
+                            <exclude>com.itextpdf:itext7-core</exclude>
+                            <exclude>com.itextpdf:*</exclude>
+                        </excludes>
+                        <message>Stop! Commercial iText (AGPL) detected. Use OpenPDF instead.</message>
+                    </bannedDependencies>
+                </rules>
+                <fail>true</fail>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+
+2. Gradle: Dependency Constraints
+In Gradle, you can use constraints or exclude rules. A very effective way to handle this globally is to tell Gradle to exclude iText from all configurations:
+configurations.all {
+    exclude group: 'com.itextpdf', module: 'itextpdf'
+    exclude group: 'com.itextpdf', module: 'itext7-core'
+}
+
+Verifying Your Victory
+Once you apply these changes, run your build.
+ * If it passes: You are 100% clean of the restricted iText library.
+ * If it fails: The error message will tell exactly which "innocent" library in your project was trying to pull in the paid version of iText.
+Final Migration Note
+Since you are on 9.3.4, keep in mind that Flying Saucer (OpenPDF version) is a very stable "maintenance" branch. It won't have the cutting-edge features of iText 8 (like advanced PDF/UA or complex digital signatures), but for standard HTML-to-PDF conversion, it is the industry standard for avoiding licensing fees.
+Would you like me to review a snippet of your pom.xml or build.gradle to make sure the exclusions are placed correctly?
